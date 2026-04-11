@@ -52,6 +52,12 @@ Previous entries referencing PostgreSQL integer user_id were based on inferred s
 
 ---
 
-**Injection test question:** The agent needs to join MongoDB `business.business_id` with DuckDB `review.business_ref`. What transformation is required and why can't it do a direct string equality join?
+## Injection Test
 
-**Expected answer:** MongoDB stores the key as `"businessid_N"` and DuckDB stores it as `"businessref_N"`. The prefixes are different so string equality always returns zero rows. The agent must strip both prefixes to extract the integer N and match on that. Use `resolve_join_key(val, "mongodb_business", "duckdb_review")` from `utils/join_key_resolver.py`.
+**Test question:** The agent needs to join MongoDB `business.business_id` with DuckDB `review.business_ref`. What transformation is required and why can't it do a direct string equality join?
+
+**Expected answer:** MongoDB stores the key as `"businessid_N"` and DuckDB stores it as `"businessref_N"`. The prefixes differ so string equality always returns zero rows. The agent must strip both prefixes to extract integer N and match on that. Call `resolve_join_key(val, "mongodb_business", "duckdb_review")` from `utils/join_key_resolver.py`.
+
+**Test question 2:** A query starts from MongoDB `support_tickets` (containing `customer_id: "CUST-00423"`) and needs to look up PostgreSQL `transactions` (containing integer `customer_id: 423`). What does the agent need to do, and is this direction registered in `join_key_resolver.py`?
+
+**Expected answer:** The agent must strip the `"CUST-"` prefix and parse the remaining zero-padded digits as an integer (423). This is the reverse direction (MongoDB → PostgreSQL) of the standard PostgreSQL → MongoDB rule. Per the General Rules in this glossary, both directions must be registered in `FORMAT_REGISTRY`. If only one direction is present, the reverse-direction join returns zero rows — a known failure mode documented in Probe 009 of the adversarial probe library.

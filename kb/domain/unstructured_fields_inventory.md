@@ -45,6 +45,12 @@ This document lists every field across DAB datasets that contains unstructured o
 
 ---
 
-**Injection test question:** A query asks for the number of check-ins business `businessid_5` had in 2013. Which field requires extraction, what is the extraction step, and why does a simple date filter fail?
+## Injection Test
+
+**Test question:** A query asks for the number of check-ins business `businessid_5` had in 2013. Which field requires extraction, what is the extraction step, and why does a simple date filter fail?
 
 **Expected answer:** `checkin.date` in MongoDB requires splitting — it is a single comma-separated string of multiple timestamps, not a single date value. A simple `WHERE date > '2013-01-01'` filter on the raw field compares the entire multi-timestamp string as one value, which fails or returns wrong results. The agent must split the string on `","`, parse each individual timestamp with `dateutil.parser`, then filter and count.
+
+**Test question 2:** A query asks "how many reviews for Italian restaurants mention slow service negatively?" An agent runs `SELECT COUNT(*) FROM review WHERE LOWER(text) LIKE '%slow%'`. What is wrong with this approach, and what extraction step should the agent use instead?
+
+**Expected answer:** The LIKE approach over-counts — reviews saying "not slow", "surprisingly fast, not slow at all", or "wait was short" all match the keyword but are neutral or positive. `review.text` is listed in this inventory as requiring sentiment classification before aggregation. The correct approach: use `response_synthesizer.extract_from_text()` to classify each matching review as positive/negative/neutral on the "slow service" topic, then count only the negative-classified rows. Keyword matching alone on any field in this inventory produces wrong results.

@@ -145,10 +145,12 @@ The MongoDB database (`yelp_businessinfo`) contains only `business` and `checkin
 
 ---
 
-**Injection test question:** What is the join key format between MongoDB `business.business_id`
-and DuckDB `review.business_ref`, and what transformation is required?
+## Injection Test
 
-**Expected answer:** MongoDB stores it as `"businessid_N"` (prefix `businessid_`). DuckDB stores
-it as `"businessref_N"` (prefix `businessref_`). The numeric suffix N is the same in both.
-The agent must strip both prefixes, match on the integer N, and cannot do a direct string equality
-join. Use `utils/join_key_resolver.py` with the `("mongodb", "duckdb")` rule.
+**Test question:** What is the join key format between MongoDB `business.business_id` and DuckDB `review.business_ref`, and what transformation is required?
+
+**Expected answer:** MongoDB stores it as `"businessid_N"` (e.g. `"businessid_49"`). DuckDB stores it as `"businessref_N"` (e.g. `"businessref_49"`). The numeric suffix N is the same in both. Direct string equality returns zero rows — the agent must strip both prefixes, match on the integer N, and reconstruct the target prefix. Use `utils/join_key_resolver.py` with the `("mongodb_business", "duckdb_review")` rule.
+
+**Test question 2:** A query asks "how many check-ins did businessid_5 have in 2013?" An agent filters `checkin.date > '2013-01-01'` on the raw MongoDB field. What goes wrong?
+
+**Expected answer:** `checkin.date` is a single comma-separated string of multiple timestamps (e.g. `"2011-03-18 21:32:32, 2011-07-03 19:19:32, ..."`), not a single date value. Filtering the raw field as a date compares the entire multi-timestamp string, which will not match correctly. The agent must split the string on `","`, parse each timestamp individually with `dateutil.parser`, then filter and count. A simple date filter on the raw field will return wrong results.

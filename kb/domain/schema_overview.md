@@ -82,3 +82,15 @@ This is documented in `kb/AGENT.md` Critical Rules.
 
 **Schema stubs for non-Yelp datasets:** Add confirmed schema entries here as each dataset is
 loaded and introspected. Follow the Yelp template above.
+
+---
+
+## Injection Test
+
+**Test question:** A query asks "How many businesses in Nevada have at least 10 reviews?" An agent using this schema file routes the query only to DuckDB. What is wrong, and what should the agent do instead?
+
+**Expected answer:** Wrong — Nevada (state filter) and review_count are stored in the MongoDB business collection (yelp_businessinfo), not in DuckDB (yelp_user). DuckDB's review table has individual review rows, not per-business counts or location data. The correct routing is: (1) query MongoDB business collection with {$match: {description: {$regex: ", NV,"}, review_count: {$gte: 10}}}, then (2) return the count directly from MongoDB without needing a DuckDB sub-query.
+
+**Test question 2:** An agent tries `SELECT * FROM business WHERE ...` against DuckDB. What error will it get and why?
+
+**Expected answer:** `Catalog Error: Table with name business does not exist!` — DuckDB (yelp_user) contains only review, user, and tip tables. The business collection is in MongoDB (yelp_businessinfo). Any query needing business attributes, categories, WiFi, parking, is_open, or location must go to MongoDB.
