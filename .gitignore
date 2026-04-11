@@ -19,6 +19,10 @@ DataAgentBench/
 logs/
 *.jsonl
 
+# Generated outputs
+utils/schema_output.md
+eval/run_logs/
+
 # OS
 .DS_Store
 
