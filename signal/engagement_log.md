@@ -22,15 +22,21 @@
 |------|------|-------|---------|-------------|
 | Apr 10 |https://x.com/i/status/2042340294788571217| DAB 38% ceiling — context engineering problem | 1 | 85 |
 
-## Community Intelligence 
-| Date | Source | Finding | Action taken |
-|------|--------|---------|--------------|
-| Apr 10 | X reply | Engineer noted that dialect translation debt compounds fast when teams pick specialized DBs per use case — agents inherit silo decisions with no context of why the split exists | Bring to mob session — relevant to how Drivers architect cross-DB routing and what IOs should document in KB v2 domain layer |
-
 ## Reddit
 | Date | Platform | Link | Upvotes | Notable replies |
 |------|----------|------|---------|----------------|
 | Apr 11 | r/LocalLLaMA | https://www.reddit.com/r/LocalLLaMA/comments/1sjh8fr/dataagentbench_frontier_models_score_38_on_real/ | TBD | TBD |
+| Apr 11 | r/MachineLearning | https://www.reddit.com/r/MachineLearning/comments/1sjnha5/frameworks_for_supporting_llmagentic_benchmarking/ | TBD | TBD 
+
+
+### Community Intelligence
+
+Record any technical insight gathered from external sources that changed or should change the team's technical approach:
+
+| Date | Source | Finding | Action taken |
+|------|--------|---------|--------------|
+| Apr 10 | X reply | Engineer noted that dialect translation debt compounds fast when teams pick specialized DBs per use case — agents inherit silo decisions with no context of why the split exists | Bring to mob session — relevant to how Drivers architect cross-DB routing and what IOs should document in KB v2 domain layer |
+| Apr 11 | r/MachineLearning comment | Developer questioning pass@k as a meaningful metric — building Bayesian benchmarking alternative (bayesbench). Key insight: systematic failures (0% across all trials) can't be resolved by more sampling — supports DAB's finding that bottleneck is planning not variance |
 
 ### Resource Acquisitions
 
@@ -39,15 +45,6 @@
 | Cloudflare Workers free tier | 2026-04-07 | [PENDING — update with outcome] | [Add access instructions here once obtained] |
 | API credits (list any applied for) | — | — | — |
 
-### Community Intelligence
-
-Record any technical insight gathered from external sources that changed or should change the team's technical approach:
-
-| Date | Source | Insight | Action Taken |
-|------|--------|---------|--------------|
-| — | — | — | — |
-
----
 
 ## Week 9
 
