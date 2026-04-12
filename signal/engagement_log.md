@@ -17,6 +17,16 @@
 | 2026-04-10 | Reddit | Comment | Substantive comment on r/MachineLearning post about enterprise data agents | [PENDING] | — | — |
 | 2026-04-11 | X (Twitter) | Thread | Second X thread — what the team is building: DAB benchmark, multi-database architecture decision, first unexpected result from Yelp dataset loading | [PENDING] | — | — |
 
+## X Threads
+| Date | Link | Topic | Replies | Impressions |
+|------|------|-------|---------|-------------|
+| Apr 10 |https://x.com/i/status/2042340294788571217| DAB 38% ceiling — context engineering problem | 1 | 85 |
+
+## Community Intelligence 
+| Date | Source | Finding | Action taken |
+|------|--------|---------|--------------|
+| Apr 10 | X reply | Engineer noted that dialect translation debt compounds fast when teams pick specialized DBs per use case — agents inherit silo decisions with no context of why the split exists | Bring to mob session — relevant to how Drivers architect cross-DB routing and what IOs should document in KB v2 domain layer |
+
 ### Resource Acquisitions
 
 | Resource | Application Date | Outcome | Instructions for Team |
