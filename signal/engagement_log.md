@@ -27,6 +27,11 @@
 |------|--------|---------|--------------|
 | Apr 10 | X reply | Engineer noted that dialect translation debt compounds fast when teams pick specialized DBs per use case — agents inherit silo decisions with no context of why the split exists | Bring to mob session — relevant to how Drivers architect cross-DB routing and what IOs should document in KB v2 domain layer |
 
+## Reddit
+| Date | Platform | Link | Upvotes | Notable replies |
+|------|----------|------|---------|----------------|
+| Apr 11 | r/LocalLLaMA | https://www.reddit.com/r/LocalLLaMA/comments/1sjh8fr/dataagentbench_frontier_models_score_38_on_real/ | TBD | TBD |
+
 ### Resource Acquisitions
 
 | Resource | Application Date | Outcome | Instructions for Team |
