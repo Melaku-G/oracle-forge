@@ -21,11 +21,11 @@ sources:
 
   sqlite_dab:
     kind: "sqlite"
-    db_path: "/home/natnael/oracle-forge/db/dab_sqlite.db"
+    db_path: "/home/yakob/oracle-forge/DataAgentBench/query_bookreview/query_dataset/review_query.db"
 
   duckdb_dab:
     kind: "duckdb"
-    db_path: "/home/natnael/oracle-forge/db/yelp_user.db"
+    db_path: "/home/yakob/oracle-forge/DataAgentBench/query_yelp/query_dataset/yelp_user.db"
 
 tools:
   postgres_query:

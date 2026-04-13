@@ -15,12 +15,12 @@ uri: mongodb://127.0.0.1:27017/yelp_db
 kind: source
 name: sqlite_dab
 type: sqlite
-database: /home/natnael/oracle-forge/db/dab_sqlite.db
+database: /home/yakob/oracle-forge/DataAgentBench/query_bookreview/query_dataset/review_query.db
 ---
 kind: source
 name: duckdb_dab
 type: duckdb
-database: /home/natnael/oracle-forge/db/yelp_user.db
+database: /home/yakob/oracle-forge/DataAgentBench/query_yelp/query_dataset/yelp_user.db
 ---
 kind: tool
 name: postgres_query

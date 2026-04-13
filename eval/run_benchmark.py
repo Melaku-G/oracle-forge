@@ -26,7 +26,7 @@ from agent.prompt_library import PromptLibrary
 from agent.context_manager import ContextManager
 from agent.agent_core import AgentCore
 
-DAB_ROOT = Path("/home/natnael/DataAgentBench")
+DAB_ROOT = Path(os.getenv("DAB_ROOT", "/home/yakob/oracle-forge/DataAgentBench"))
 
 AGENT_MD    = "agent/AGENT.md"
 CORRECTIONS = "kb/corrections/corrections_log.md"
