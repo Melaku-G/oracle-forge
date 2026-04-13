@@ -21,7 +21,7 @@
 | Date | Link | Topic | Replies | Impressions |
 |------|------|-------|---------|-------------|
 | Apr 10 |https://x.com/i/status/2042340294788571217| DAB 38% ceiling — context engineering problem | 1 | 85 |
-
+Apr 11 | https://x.com/melakuG21193/status/2043604628030226886 | Claude Code 3-layer memory architecture applied to data agents | 0 | TBD |
 ## Reddit
 | Date | Platform | Link | Upvotes | Notable replies |
 |------|----------|------|---------|----------------|
@@ -30,8 +30,6 @@
 
 
 ### Community Intelligence
-
-Record any technical insight gathered from external sources that changed or should change the team's technical approach:
 
 | Date | Source | Finding | Action taken |
 |------|--------|---------|--------------|
