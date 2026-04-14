@@ -205,9 +205,13 @@ class AgentCore:
         return self.executor.execute(sub_query)
 
     def _synthesize(self, question: str, raw_results: dict) -> str:
-        if _has_execution_error(raw_results):
+        all_errors = all(
+            isinstance(v, dict) and "error" in v
+            for v in raw_results.values()
+        )
+        if all_errors:
             return (
-                "I could not produce a reliable answer because one or more database queries failed. "
+                "I could not produce a reliable answer because all database queries failed. "
                 "Please retry after fixing the failing query path."
             )
         prompt = self.prompts.synthesize_response(question, raw_results, {})
