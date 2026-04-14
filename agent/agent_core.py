@@ -289,18 +289,26 @@ def _extract_business_refs(mongo_result) -> list[str]:
 
 
 def _enforce_intent_db_coverage(question: str, available_databases: list[str], intent: dict) -> dict:
-    """Apply deterministic DB routing guardrails on top of model intent."""
+    """Override LLM intent when it misses an obviously-needed database."""
     target = set(intent.get("target_databases", []))
     q = question.lower()
     available = set(available_databases)
-    needs_rating = any(k in q for k in ("rating", "average", "highest", "top", "reviews"))
-    needs_business_metadata = any(
-        k in q for k in ("city", "state", "category", "wifi", "parking", "credit card", "business")
+
+    # MongoDB: business attributes that only live in that store
+    MONGO_SIGNALS = ("city", "state", "categor", "wifi", "wi-fi", "parking", "credit card", "business")
+    # DuckDB: star-rating aggregation — "average" alone is not enough, must say "rating"
+    needs_duck_rating = "rating" in q
+    # DuckDB: date-scoped review / user-registration queries
+    _YEARS = ("2015", "2016", "2017", "2018", "2019", "2020")
+    needs_duck_temporal = (
+        ("review" in q or "registered" in q) and any(yr in q for yr in _YEARS)
     )
-    if "mongodb" in available and needs_business_metadata:
+
+    if "mongodb" in available and any(s in q for s in MONGO_SIGNALS):
         target.add("mongodb")
-    if "duckdb" in available and needs_rating:
+    if "duckdb" in available and (needs_duck_rating or needs_duck_temporal):
         target.add("duckdb")
+
     target &= available
     if not target:
         target = available
@@ -312,27 +320,28 @@ def _enforce_intent_db_coverage(question: str, available_databases: list[str], i
 def _validate_query_semantics(question: str, db_type: str, query: str):
     """Reject known-invalid query patterns before execution."""
     q = question.lower()
-    text = query.lower().replace(" ", "")
-    rating_question = "rating" in q or ("average" in q and "review" in q)
-    if rating_question and "avg($review_count)" in text:
-        raise ValueError("Invalid query: using review_count as rating in MongoDB aggregation.")
-    if rating_question and "avg(review_count)" in text:
-        raise ValueError("Invalid query: using review_count as rating in SQL query.")
-    if db_type == "duckdb" and text.startswith("selectnullasreason"):
-        raise ValueError("Invalid placeholder DuckDB query produced by model.")
+    rating_question = "rating" in q
+
+    if rating_question:
+        if db_type == "mongodb":
+            # {"$avg": "$review_count"} after collapsing spaces → "$avg":"$review_count"
+            compact = query.lower().replace(" ", "")
+            if '"$avg":"$review_count"' in compact:
+                raise ValueError("Invalid: $avg on $review_count used as rating in MongoDB pipeline.")
+        else:
+            # catches AVG(review_count), AVG(r.review_count), etc.
+            if re.search(r'\bavg\s*\(\s*\w*\.?\s*review_count\s*\)', query, re.IGNORECASE):
+                raise ValueError("Invalid: AVG(review_count) used as rating in SQL query.")
+
+    # Reject obviously empty or placeholder queries
+    stripped = query.strip().lower()
+    if db_type == "duckdb" and stripped.startswith("select null"):
+        raise ValueError("Invalid placeholder DuckDB query.")
+    if db_type == "mongodb" and stripped in ("[]", "{}", "[{}]"):
+        raise ValueError("Invalid empty MongoDB pipeline.")
 
 
 def _has_execution_error(raw_results: dict) -> bool:
-    for value in raw_results.values():
-        if isinstance(value, dict) and "error" in value:
-            return True
-    return False
-
-
-def _fallback_query_for_db(db_type: str) -> str:
-    """Return a minimal valid query so the pipeline keeps running."""
-    if db_type == "mongodb":
-        return '[{"$collection":"business"},{"$limit":0}]'
-    return "SELECT 1 WHERE 1 = 0"
+    return any(isinstance(v, dict) and "error" in v for v in raw_results.values())
 
 
