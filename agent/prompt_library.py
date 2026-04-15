@@ -18,13 +18,22 @@ ROUTING RULES — use the schema in your context to determine which database hol
 - Use "postgresql_first" when PostgreSQL metadata is the main discriminator and SQLite holds reviews
 - Use "sqlite_first" when SQLite holds the review/rating data and the other DB holds metadata
 
+CATEGORY QUESTION DETECTION:
+- Set is_category_question=true when the question asks which category/type/genre of business has
+  the most of something (e.g. "which category has the most reviews", "what type of business has
+  the highest rating", "what categories are open on Sundays"). Categories are embedded in the
+  MongoDB business.description field — they are never a standalone field.
+- Set is_category_question=false for questions about a specific named category, or questions
+  that don't involve grouping or ranking by category.
+
 Respond with valid JSON only:
 {{
   "target_databases": ["database_type_1", "database_type_2"],
   "intent_summary": "brief description of what data is needed",
   "requires_join": true,
   "join_direction": "mongodb_first",
-  "data_fields_needed": ["field1", "field2"]
+  "data_fields_needed": ["field1", "field2"],
+  "is_category_question": false
 }}"""
 
     def nl_to_sql(self, question: str, schema: str, dialect: str = "postgresql") -> str:
@@ -111,8 +120,8 @@ Return only the valid JSON array, no explanation, no markdown fences."""
     def nl_to_sql_with_refs(self, question: str, schema: str, business_refs_sql: str,
                             dialect: str = "duckdb") -> str:
         return f"""Generate a {dialect.upper()} query for this question.
-The query MUST filter to only these IDs (already resolved from the other database):
-id IN ({business_refs_sql})
+The query MUST filter to only these business_refs (already resolved from MongoDB):
+business_ref IN ({business_refs_sql})
 
 Schema:
 {schema}
@@ -171,11 +180,15 @@ Fix the query. Return only the corrected query, no explanation."""
         if cat_agg:
             cat_section = f"\n\nPRE-COMPUTED category_aggregation (use this directly):\n{json.dumps(cat_agg, indent=2)}"
 
-        # Truncate MongoDB to 100 docs max to keep context manageable
+        # When category_aggregation is pre-computed, raw MongoDB docs are already consumed
+        # by Python extraction — skip them entirely to avoid bloating the LLM context.
+        # Otherwise truncate to 100 docs max to keep context manageable.
         truncated_results = {}
         for k, v in merged_results.items():
             if k == "category_aggregation":
                 continue
+            if k == "mongodb" and isinstance(v, list) and cat_agg:
+                continue  # raw docs not needed — category_aggregation already summarises them
             if k == "mongodb" and isinstance(v, list) and len(v) > 100:
                 truncated_results[k] = v[:100]
                 truncated_results["mongodb_note"] = f"(showing 100 of {len(v)} docs)"

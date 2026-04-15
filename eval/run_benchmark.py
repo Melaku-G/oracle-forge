@@ -211,8 +211,14 @@ async def main():
     any_pass_count = sum(1 for r in results if r["any_pass"])
     query_pass_rate = any_pass_count / len(queries) if queries else 0
     print("\n" + "=" * 60)
-    print(f"Query-level pass@{args.trials}: {any_pass_count}/{len(queries)} ({query_pass_rate:.1%})  — at least 1 trial passed")
-    print(f"Trial-level pass rate:  {passed}/{total} ({pass_rate:.1%})  — across all individual trials")
+    print(
+        f"Query-level pass@{args.trials}: {any_pass_count}/{len(queries)} "
+        f"({query_pass_rate:.1%})  — at least 1 trial passed"
+    )
+    print(
+        f"Trial-level pass rate:  {passed}/{total} "
+        f"({pass_rate:.1%})  — across all individual trials"
+    )
 
     # Write results JSON
     run_ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")

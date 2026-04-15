@@ -162,6 +162,13 @@ These mismatches will cause silent wrong answers if not handled:
 6. Consult the corrections log in your context before generating a fix (Layer 3)
 7. If results are empty, say so explicitly — do not fabricate
 8. Do not conflate MongoDB fields with DuckDB fields — they are different databases
+9. **MongoDB pipelines MUST always begin with `{"$collection": "<name>"}` as the first element.**
+   Omitting `$collection` causes the query to silently fall back to the `business` collection,
+   which will return wrong results for `checkin` queries. Use `"checkin"` for check-in data.
+10. **Category questions**: business categories are NOT a MongoDB field — they are embedded in
+    the `description` text (e.g. "...offers Restaurants, Italian, Nightlife."). Never use
+    `$group` on a categories field. Instead, return `business_id` + `description` per document
+    and let post-processing extract and aggregate categories via the description patterns.
 
 ## Context Layers Injected at Session Start
 - **Layer 1**: This file (schema + behavioral rules)

@@ -75,9 +75,19 @@ class QueryExecutor:
                     collection = pipeline.pop(0)["$collection"]
                 else:
                     collection = "business"
+                    print(
+                        "WARNING: MongoDB pipeline missing $collection, "
+                        f"defaulting to 'business'. Query prefix: {sub_query.query[:80]}",
+                        flush=True,
+                    )
             except (json.JSONDecodeError, IndexError):
                 pipeline = sub_query.query
                 collection = "business"
+                print(
+                    "WARNING: MongoDB pipeline parse error, "
+                    f"defaulting to 'business'. Query prefix: {str(sub_query.query)[:80]}",
+                    flush=True,
+                )
             serialized = pipeline if isinstance(pipeline, str) else json.dumps(pipeline)
             return {"collection": collection, "pipeline": serialized}
 

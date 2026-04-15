@@ -47,9 +47,13 @@ class AgentCore:
                 ))
             elif requires_join and join_direction == "duckdb_first" and db_type == "mongodb":
                 # Placeholder — MongoDB query regenerated with business_ids after DuckDB runs
+                _placeholder_query = (
+                    '[{"$collection": "business"}, '
+                    '{"$project": {"business_id": 1, "name": 1, "description": 1}}]'
+                )
                 sub_queries.append(SubQuery(
                     database_type=db_type,
-                    query='[{"$collection": "business"}, {"$project": {"business_id": 1, "name": 1, "description": 1}}]',
+                    query=_placeholder_query,
                     intent=intent.get("intent_summary", question),
                 ))
             else:
@@ -95,8 +99,8 @@ class AgentCore:
         # Override any duckdb_first direction the LLM may have chosen for state questions.
         if _is_state_aggregation_question(q_lower_check):
             join_direction = "mongodb_first"
-        # User-based category questions (e.g. "categories most reviewed by users registered in YEAR")
-        # require DuckDB first to identify business_refs from user/review tables.
+        # User-based category questions (e.g. "categories most reviewed by users registered in
+        # YEAR") require DuckDB first to identify business_refs from user/review tables.
         elif _is_user_category_question(q_lower_check):
             join_direction = "duckdb_first"
 
@@ -120,9 +124,9 @@ class AgentCore:
                 except ValueError:
                     pass  # fall through with SELECT 1 — will still fail gracefully
 
-            # If the question asks about categories, remove any LIMIT from the DuckDB query
+            # If this is a category-ranking question, remove any LIMIT from the DuckDB query
             # so we get ALL business_refs (category aggregation needs all, not just top N).
-            if "categor" in request.question.lower():
+            if intent.get("is_category_question", False):
                 duck_sq = SubQuery(
                     database_type=duck_sq.database_type,
                     query=_remove_limit_clause(duck_sq.query),
@@ -170,7 +174,7 @@ class AgentCore:
             self_corrections.extend(mongo_corr)
 
             # For category-ranking questions, use Python extraction instead of MongoDB grouping
-            if "categor" in q_lower:
+            if intent.get("is_category_question", False):
                 cat_refs, top_cat_name, top_cat_count = _compute_top_category_refs(mongo_result)
                 if cat_refs:
                     business_refs = cat_refs
@@ -501,6 +505,9 @@ _CAT_EXTRACT_PATTERNS = [
     r'eatery specializes in ([^.]+),',
     r'specializes in ([^.]+)\.',
     r'for ([^,]+(?:, [^,]+)*), perfect for',
+    # Primary description format: "this [type] offers [Category1], [Category2]."
+    # Capital-letter guard avoids matching "offers a great selection of..." prose
+    r'offers ([A-Z][^.]+)\.',
     # Generic connectors (reliable and common — placed before optional connectors)
     r'including ([^.]+)\.',
     r'featuring ([^.]+)\.',
