@@ -220,6 +220,9 @@ cloudflared tunnel --url http://localhost:8080
 # Prints a URL like: https://random-words.trycloudflare.com
 ```
 
+Current demo endpoint (temporary quick tunnel, may change on restart):  
+`https://subjective-heading-powers-hiking.trycloudflare.com`
+
 **Endpoints:**
 
 | Method | Path | Description |
