@@ -1,0 +1,142 @@
+{
+  "run_timestamp": "2026-04-15T18:29:28.996064",
+  "run_label": "run5_kb_fix_both_datasets",
+  "yelp_score": "5/7",
+  "results": [
+    {
+      "query_id": "Q1",
+      "dataset": "yelp",
+      "question": "What is the average rating of businesses in Indianapolis, Indiana?",
+      "ground_truth": "3.547",
+      "agent_answer": "The provided results do not contain the average rating for businesses in Indianapolis, Indiana. They only provide a list of business IDs. To answer the question, data with average ratings associated with these business IDs is needed.",
+      "databases_used": [
+        "mongodb"
+      ],
+      "self_corrections": 0,
+      "status": "FAIL",
+      "error": null
+    },
+    {
+      "query_id": "Q2",
+      "dataset": "yelp",
+      "question": "Which state has the highest number of reviews and what is its average rating?",
+      "ground_truth": "PA, 3.699",
+      "agent_answer": "PA (Pennsylvania) - avg 3.699, 662 reviews.",
+      "databases_used": [
+        "mongodb",
+        "duckdb"
+      ],
+      "self_corrections": 0,
+      "status": "PASS",
+      "error": null
+    },
+    {
+      "query_id": "Q3",
+      "dataset": "yelp",
+      "question": "How many businesses that offer parking had reviews in 2018?",
+      "ground_truth": "35",
+      "agent_answer": "30 businesses that offer parking had reviews in 2018.",
+      "databases_used": [
+        "mongodb",
+        "duckdb"
+      ],
+      "self_corrections": 0,
+      "status": "FAIL",
+      "error": null
+    },
+    {
+      "query_id": "Q4",
+      "dataset": "yelp",
+      "question": "Which business category has the most businesses that accept credit cards, and what is their average rating?",
+      "ground_truth": "Restaurant, 3.634",
+      "agent_answer": "Restaurants has the most businesses that accept credit cards - avg rating 3.63, 27 items.",
+      "databases_used": [
+        "mongodb",
+        "duckdb"
+      ],
+      "self_corrections": 0,
+      "status": "PASS",
+      "error": null
+    },
+    {
+      "query_id": "Q5",
+      "dataset": "yelp",
+      "question": "Which state has the most businesses with WiFi and what is their average rating?",
+      "ground_truth": "PA, 3.48",
+      "agent_answer": "PA (Pennsylvania) - avg 3.48, 8 businesses.",
+      "databases_used": [
+        "mongodb",
+        "duckdb"
+      ],
+      "self_corrections": 0,
+      "status": "PASS",
+      "error": null
+    },
+    {
+      "query_id": "Q6",
+      "dataset": "yelp",
+      "question": "What business had the highest average rating in the first half of 2016 with at least 5 reviews, and what category is it?",
+      "ground_truth": "Coffee House Too Cafe",
+      "agent_answer": "Coffee House Too Cafe - 4.55, belongs to: Restaurants, Breakfast & Brunch, American (New), Cafes.",
+      "databases_used": [
+        "duckdb",
+        "mongodb"
+      ],
+      "self_corrections": 0,
+      "status": "PASS",
+      "error": null
+    },
+    {
+      "query_id": "Q7",
+      "dataset": "yelp",
+      "question": "What are the top 5 business categories by review count from users who registered in 2016?",
+      "ground_truth": "Restaurants",
+      "agent_answer": "The top business categories by review count from users who registered in 2016 are: Restaurants with 58 reviews, Food with 35 reviews, American (New) with 24 reviews, Shopping with 20 reviews, Breakfast & Brunch with 19 reviews, Local Services with 17 reviews, American (Traditional) with 16 reviews, Automotive with 14 reviews, Fast Food with 14 reviews, and Bars with 14 reviews.",
+      "databases_used": [
+        "duckdb",
+        "mongodb"
+      ],
+      "self_corrections": 0,
+      "status": "PASS",
+      "error": null
+    },
+    {
+      "query_id": "BR1",
+      "dataset": "bookreview",
+      "question": "How many books are in the database?",
+      "agent_answer": "There are 1833 books in the database.",
+      "databases_used": [
+        "sqlite"
+      ],
+      "self_corrections": 0,
+      "status": "RAN",
+      "error": null
+    },
+    {
+      "query_id": "BR2",
+      "dataset": "bookreview",
+      "question": "What is the average rating of all reviews?",
+      "agent_answer": "The average rating of all reviews is 4.509.",
+      "databases_used": [
+        "postgresql",
+        "sqlite"
+      ],
+      "self_corrections": 3,
+      "status": "RAN",
+      "error": null
+    },
+    {
+      "query_id": "BR3",
+      "dataset": "bookreview",
+      "question": "Which book has the most reviews?",
+      "agent_answer": "The database returned errors and no results for the requested information.",
+      "databases_used": [
+        "postgresql",
+        "sqlite"
+      ],
+      "self_corrections": 3,
+      "status": "RAN",
+      "error": null
+    }
+  ]
+}

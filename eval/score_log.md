@@ -106,3 +106,5 @@ python eval/score.py --results eval/run_logs/benchmark_yelp_<timestamp>.json
 | 20260415_163356 | bookreview | 3/3 | 100% | query-pass@1 | — |
 | 20260415_163833 | yelp | 6/7 | 86% | query-pass@1 | — |
 | 20260415_163944 | bookreview | 3/3 | 100% | query-pass@1 | — |
+| 20260415_183320 | yelp | 7/7 | 100% | query-pass@5 | — |
+| 20260415_183414 | bookreview | 1/3 | 33% | query-pass@1 | — |

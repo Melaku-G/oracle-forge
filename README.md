@@ -137,6 +137,9 @@ oracle-forge/
 │       ├── injection_tests.md   ← verified injection test evidence
 │       └── CHANGELOG.md
 │
+├── api/                         # Public HTTP API
+│   └── server.py                # FastAPI app — POST /query, GET /health, GET /datasets
+│
 ├── mcp/                         # MCP Toolbox (Driver 1)
 │   ├── mcp_server.py            # FastAPI MCP server (6 tools, JSON-RPC 2.0)
 │   └── tools.yaml               # Tool definitions for all 4 DB types
@@ -198,6 +201,51 @@ The master context file loaded at every session start is [`agent/AGENT.md`](agen
 | 2026-04-14 | 7/7 | 100% | Python post-processing for state/category extraction |
 
 Full run history in [`eval/score_log.md`](eval/score_log.md).
+
+---
+
+## Public Query API
+
+A lightweight HTTP API lets anyone submit natural-language questions to the agent without running the CLI.
+
+**Start the API server:**
+```bash
+source .venv/bin/activate && source .env
+uvicorn api.server:app --port 8080
+```
+
+**Expose publicly via Cloudflare Tunnel** (no account needed):
+```bash
+cloudflared tunnel --url http://localhost:8080
+# Prints a URL like: https://random-words.trycloudflare.com
+```
+
+**Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Liveness check |
+| `GET` | `/datasets` | List valid dataset names |
+| `POST` | `/query` | Submit a question |
+
+**Example request:**
+```bash
+curl -X POST https://<tunnel-url>/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the top 5 rated businesses?", "dataset": "yelp"}'
+```
+
+**Example response:**
+```json
+{
+  "answer": "The top 5 rated businesses are...",
+  "session_id": "abc123",
+  "dataset": "yelp",
+  "confidence": 0.9
+}
+```
+
+Interactive API docs available at `http://localhost:8080/docs`.
 
 ---
 
