@@ -506,8 +506,6 @@ _CAT_EXTRACT_PATTERNS = [
     r'eatery specializes in ([^.]+),',
     r'specializes in ([^.]+)\.',
     r'for ([^,]+(?:, [^,]+)*), perfect for',
-    # Capital-letter guard avoids matching "offers a great selection of..." prose
-    r'offers ([A-Z][^.]+)\.',
     # Generic connectors (reliable and common — placed before optional connectors)
     r'including ([^.]+)\.',
     r'featuring ([^.]+)\.',
@@ -525,9 +523,14 @@ _CAT_EXTRACT_PATTERNS = [
 
 def _compute_top_category_refs(mongo_result) -> tuple[list[str], str, int]:
     """From a list of business docs with descriptions, find the top category by business count.
-    Returns: (refs_for_top_category, top_category_name, business_count)"""
+    Returns: (refs_for_top_category, top_category_name, business_count)
+
+    Confidence check: if parse yield is <30% of total docs, logs a warning so callers
+    can decide whether to trust the result.
+    """
     docs = mongo_result if isinstance(mongo_result, list) else mongo_result.get("rows", [])
     cat_to_refs: dict[str, list[str]] = defaultdict(list)
+    parsed_count = 0
     for doc in docs:
         if not isinstance(doc, dict):
             continue
@@ -537,8 +540,21 @@ def _compute_top_category_refs(mongo_result) -> tuple[list[str], str, int]:
         bref = bid.replace("businessid_", "businessref_")
         desc = doc.get("description", "")
         cats = _extract_categories_from_description(desc)
+        if cats:
+            parsed_count += 1
         for cat in cats:
             cat_to_refs[cat].append(bref)
+
+    total_docs = sum(
+        1 for d in docs
+        if isinstance(d, dict) and d.get("business_id", "").startswith("businessid_")
+    )
+    if total_docs > 0 and parsed_count / total_docs < 0.30:
+        print(
+            f"WARNING: category extraction low confidence — "
+            f"parsed {parsed_count}/{total_docs} docs ({100*parsed_count//total_docs}%)",
+            flush=True,
+        )
 
     if not cat_to_refs:
         return [], "", 0
@@ -554,7 +570,14 @@ def _compute_top_category_refs(mongo_result) -> tuple[list[str], str, int]:
 
     # Find category with most businesses
     top_cat = max(cat_to_refs, key=lambda c: len(cat_to_refs[c]))
-    return cat_to_refs[top_cat], top_cat, len(cat_to_refs[top_cat])
+    top_refs = cat_to_refs[top_cat]
+    top_count = len(top_refs)
+    print(
+        f"DEBUG category: top='{top_cat}' count={top_count} "
+        f"parsed={parsed_count}/{total_docs}",
+        flush=True,
+    )
+    return top_refs, top_cat, top_count
 
 
 def _remove_limit_clause(sql: str) -> str:
@@ -563,29 +586,74 @@ def _remove_limit_clause(sql: str) -> str:
 
 
 def _extract_categories_from_description(desc: str) -> list[str]:
-    """Extract comma-separated category list from a MongoDB business description."""
+    """Extract category list from a MongoDB business description using a two-stage approach.
+
+    Stage 1: Locate the category phrase span by finding the last occurrence of a
+             known connector keyword. The categories always appear at the end of the
+             description, so taking the substring after the last connector is robust.
+    Stage 2: Split the span on commas, strip noise tokens, canonicalize to Title Case.
+
+    Falls back to single-pass regex patterns (_CAT_EXTRACT_PATTERNS) for descriptions
+    that don't follow the standard "offers X, Y, Z." tail format.
+    """
+    # Stage 1 — find the category span tail.
+    # Connectors ordered from most-specific to most-generic to pick the best anchor.
+    _CONNECTOR_RE = re.compile(
+        r'(?:specializes in|categories such as|categories of|category of'
+        r'|for enjoying|for those seeking|featuring|including'
+        r'|diverse experience with|selection of|mix of|ranging from'
+        r'|offers)\s+',
+        re.IGNORECASE,
+    )
+    best_match = None
+    for m in _CONNECTOR_RE.finditer(desc):
+        best_match = m  # keep the LAST match — categories always end the sentence
+    if best_match:
+        span = desc[best_match.end():]
+        cats = _tokenize_category_span(span)
+        if cats:
+            return cats
+
+    # Stage 2 fallback — single-pass regex library (for non-standard formats)
     for pattern in _CAT_EXTRACT_PATTERNS:
         m = re.search(pattern, desc, re.IGNORECASE)
         if m:
-            cat_text = m.group(1)
-            # Split on commas; strip leading "and " and trailing " and"
-            raw_cats = re.split(r',\s*', cat_text)
-            cats = []
-            for c in raw_cats:
-                c = c.strip()
-                c = re.sub(r'^\s*and\s+', '', c)    # strip leading "and "
-                c = re.sub(r'\s+and\s*$', '', c)    # strip trailing " and"
-                c = c.strip().title()               # normalize to Title Case
-                if c:
-                    cats.append(c)
-            # Filter out structural noise: 2-letter state codes, street addresses, numbers
-            filtered = [c for c in cats if c and 2 <= len(c) <= 50
-                        and not re.match(r'^[A-Z]{2}$', c)  # skip 2-letter state codes
-                        and not re.search(r'\b(St\.|Dr\.|Ave|Blvd|Rd|Hwy)\b', c)
-                        and not re.search(r'\d', c)]  # skip strings with numbers (addresses)
-            if filtered:
-                return filtered
+            cats = _tokenize_category_span(m.group(1))
+            if cats:
+                return cats
     return []
+
+
+def _tokenize_category_span(span: str) -> list[str]:
+    """Split a raw category span string into clean, canonicalized category names."""
+    # Trim trailing sentence punctuation and surrounding quotes
+    span = span.rstrip('.!? ').strip("'\"")
+    # Split on commas and " and " conjunctions
+    raw = re.split(r',\s*|\s+and\s+', span)
+    cats = []
+    for c in raw:
+        c = c.strip().strip("'\"")                              # strip embedded quotes
+        c = re.sub(r'^\s*and\s+', '', c, flags=re.IGNORECASE)  # leading "and"
+        # If the token contains a connective preposition, split further and check each part.
+        # e.g. "Restaurants for all your dining needs" → ["Restaurants", "all your..."]
+        # e.g. "options for Restaurants" → ["options", "Restaurants"]
+        fragments = re.split(r'\s+(?:for|per|to)\s+', c, flags=re.IGNORECASE)
+        for frag in fragments:
+            frag = frag.strip().title()
+            if not frag:
+                continue
+            # Discard noise: 2-letter state codes, address fragments, numeric strings,
+            # overly long phrases (>40 chars = prose), >4-word phrases (= sentence fragment)
+            if (len(frag) < 2 or len(frag) > 40
+                    or len(frag.split()) > 4
+                    or re.match(r'^[A-Z]{2}$', frag)
+                    or re.search(r'\b(St\.|Dr\.|Ave|Blvd|Rd|Hwy)\b', frag)
+                    or re.search(r'\d', frag)
+                    or re.match(r'^(Options|Provides|Menu|Dishes|Items|Food|Needs)$',
+                                frag, re.IGNORECASE)):
+                continue
+            cats.append(frag)
+    return cats
 
 
 def _augment_with_category_aggregation(raw_results: dict) -> dict:
