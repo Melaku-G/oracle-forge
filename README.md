@@ -23,30 +23,63 @@
 
 The agent answers natural language questions by routing sub-queries across 4 database types, merging results, and producing a verifiable answer with a full query trace.
 
-![Architecture Diagram](docs/architecture_diagram.jpg)
-> *Photo of architecture diagram — replace `docs/architecture_diagram.jpg` with the actual committed image path.*
+```mermaid
+flowchart TD
+    %% Global Node Styles
+    classDef default fill:#2d2d2d,stroke:#888,stroke-width:1px,color:#ffffff;
 
-```
-User question
-    ↓
-ContextManager.get_full_context()
-    ├── Layer 1: agent/AGENT.md      ← schemas + behavioral rules (always loaded)
-    ├── Layer 2: kb/domain/          ← business term definitions, attribute rules
-    └── Layer 3: kb/corrections/     ← 32 past failures → fixes (self-learning loop)
-    ↓
-analyze_intent() → LLM → {target_databases, join_direction}
-    ↓
-decompose_query() → [SubQuery(db_type, query), ...]
-    ↓
-For each SubQuery:
-    QueryExecutor → MCP Toolbox (localhost:5000) → DB result
-    On failure: SelfCorrector.diagnose() → retry (max 3x)
-    ↓
-Python post-processing (state/category extraction from unstructured text)
-    ↓
-ResponseSynthesizer.synthesize() → answer + QueryTrace
-    ↓
-_log_run() → eval/run_logs/<timestamp>.json
+    %% Functional Group Styles
+    classDef entryExit fill:#1a3a3a,stroke:#00f2ff,stroke-width:2px,color:#ffffff;
+    classDef logic fill:#2d2d2d,stroke:#bb86fc,stroke-width:2px,color:#ffffff;
+    classDef contextNode fill:#0d1b2a,stroke:#3a86ff,stroke-width:2px,color:#ffffff;
+    classDef database fill:#1b2e1b,stroke:#4caf50,stroke-width:2px,color:#ffffff;
+    classDef error fill:#3a1a1a,stroke:#ff5252,stroke-width:2px,color:#ffffff;
+
+    %% Subgraph Styling
+    style CTX fill:#121212,stroke:#3a86ff,stroke-width:2px,color:#ffffff,stroke-dasharray: 5 5
+
+    U([User Question]) --> SM
+    class U entryExit;
+
+    SM["StateManager\nConversation history · token-bounded truncation"] --> CM
+    class SM logic;
+
+    subgraph CTX ["Context Layers"]
+        L1["Layer 1 — agent/AGENT.md\nSchemas · join rules · behavioral rules"]
+        L2["Layer 2 — kb/domain/\nDomain terms · attribute rules"]
+        L3["Layer 3 — kb/corrections/\n32 failures → fixes · self-learning loop"]
+    end
+    class L1,L2,L3 contextNode;
+
+    CTX --> CM["ContextManager\nAssembles 3 layers within token budget"]
+    CM --> PL["PromptLibrary\nintent_analysis · nl_to_sql · nl_to_mongodb · self_correct · synthesize"]
+    PL --> AI["analyze_intent() → LLM\ntarget_databases · requires_join · join_direction"]
+    AI --> DQ["decompose_query()\nSubQuery per database"]
+    DQ --> DR["DatabaseRouter\nRoutes each SubQuery to correct DB type"]
+    DR --> QE["QueryExecutor → MCP Toolbox · localhost:5000"]
+    class CM,PL,AI,DQ,DR,QE logic;
+
+    QE --> MG[(MongoDB\nbusiness · review · user · tip)]
+    QE --> DK[(DuckDB\nreview · user · tip)]
+    QE --> PG[(PostgreSQL\nbooks_info)]
+    QE --> SL[(SQLite\nreview)]
+    class MG,DK,PG,SL database;
+
+    QE -- on failure --> SC["SelfCorrector\nsyntax_error · wrong_table\njoin_key_format · domain_knowledge_gap\nretry max 3×"]
+    SC -- corrected query --> QE
+    SC -- append failure+fix --> L3
+    class SC error;
+
+    MG & DK & PG & SL --> JK["join_key_resolver\nbusinessid_N ↔ businessref_N\nmongodb_first · duckdb_first"]
+    JK --> PP["Python Post-processing\nstate · category extraction via regex"]
+    PP --> RS["ResponseSynthesizer\nanswer · confidence · QueryTrace"]
+    class JK,PP,RS logic;
+
+    RS --> ANS([Answer to User])
+    RS --> LOG["eval/run_logs/timestamp.json"]
+    LOG -- score_log.md update --> L3
+    class ANS entryExit;
+    class LOG logic;
 ```
 
 **Two join strategies:**
