@@ -40,6 +40,16 @@ Respond with valid JSON only:
         pg_note = ""
         if dialect == "postgresql":
             pg_note = "\n- IMPORTANT: PostgreSQL and SQLite are SEPARATE databases. Do NOT join to SQLite tables (review) in this query. Only query tables available in PostgreSQL. Always include book_id in the SELECT so results can be joined to SQLite later."
+        if dialect == "postgresql_bookreview":
+            pg_note = (
+                "\n- IMPORTANT: PostgreSQL and SQLite are SEPARATE databases. "
+                "Do NOT reference or join to the SQLite `review` table in this query — "
+                "it does not exist in PostgreSQL. Only query `books_info` and other PostgreSQL tables."
+                "\n- ALWAYS include BOTH `book_id` AND `title` in the SELECT clause so Python can "
+                "join results to SQLite review data and return book titles to the user."
+                "\n- Do NOT apply rating filters (avg rating, rating = 5.0) in this query — "
+                "average ratings come from SQLite `review` and are applied after the join."
+            )
         return f"""Generate a {dialect.upper()} query for this question.
 
 Schema:
@@ -178,7 +188,7 @@ Fix the query. Return only the corrected query, no explanation."""
         cat_agg = merged_results.get("category_aggregation")
         cat_section = ""
         if cat_agg:
-            cat_section = f"\n\nPRE-COMPUTED category_aggregation (use this directly):\n{json.dumps(cat_agg, indent=2)}"
+            cat_section = f"\n\nPRE-COMPUTED category_aggregation (use this directly):\n{json.dumps(cat_agg, indent=2, ensure_ascii=False)}"
 
         # When category_aggregation is pre-computed, raw MongoDB docs are already consumed
         # by Python extraction — skip them entirely to avoid bloating the LLM context.
@@ -200,7 +210,7 @@ Fix the query. Return only the corrected query, no explanation."""
         duck_result = merged_results.get("duckdb")
         duck_section = ""
         if duck_result is not None:
-            duck_section = f"\n\nDuckDB result (CRITICAL — contains the metrics/counts):\n{json.dumps(duck_result, indent=2, default=str)}"
+            duck_section = f"\n\nDuckDB result (CRITICAL — contains the metrics/counts):\n{json.dumps(duck_result, indent=2, default=str, ensure_ascii=False)}"
             truncated_results.pop("duckdb", None)
 
         return f"""Synthesize a clear, direct answer to the user's question from these database results.
@@ -208,7 +218,7 @@ Fix the query. Return only the corrected query, no explanation."""
 Question: {question}
 
 Results from databases:
-{json.dumps(truncated_results, indent=2, default=str)[:2000]}{duck_section}{cat_section}
+{json.dumps(truncated_results, indent=2, default=str, ensure_ascii=False)[:2000]}{duck_section}{cat_section}
 
 CRITICAL JOINING RULE:
 - MongoDB results identify the ENTITY (state, category, business name, group)
@@ -255,6 +265,7 @@ Return only valid JSON."""
     def _dialect_rules(self, dialect: str) -> str:
         rules = {
             "postgresql": "use standard PostgreSQL syntax, ILIKE for case-insensitive search, cast types explicitly",
+            "postgresql_bookreview": "use standard PostgreSQL syntax, ILIKE for case-insensitive search, cast types explicitly",
             "sqlite": "use SQLite syntax, strftime('%Y', date_col) for year extraction, LIKE for text search",
             "duckdb": (
                 "use DuckDB analytical functions. "

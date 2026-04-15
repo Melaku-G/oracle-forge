@@ -127,7 +127,7 @@ These mismatches will cause silent wrong answers if not handled:
 - `categories` is stored as a JSON array string. Use `categories LIKE '%Literature & Fiction%'` for filtering — do NOT try to parse as JSON in SQL.
 - For category values containing apostrophes (e.g. `Children's Books`), use doubled single quotes in SQL: `categories LIKE '%Children''s Books%'` — NEVER use backslash escaping (`\'`).
 - `details` contains the publication year as free text e.g. "released on January 1, 2004" or "first edition on May 8, 2012". Extract year with: `CAST(SUBSTRING(details FROM 'released on [A-Za-z]+ \d+, (\d{4})') AS INTEGER)` or use `details LIKE '%2020%'` for year-only checks.
-- `details` contains language e.g. "written in English". Filter with: `details LIKE '%written in English%'`
+- `details` contains language in two formats: "written in English" OR "is available in English". Use `details LIKE '%in English%'` to match both — NEVER use `'%written in English%'` alone as it misses the "available in English" variant.
 - `rating_number` is the count of ratings, NOT the average rating. Average rating must come from SQLite `review.rating`.
 - `book_id` format: `"bookid_N"` — joins to SQLite `review.purchase_id` = `"purchaseid_N"` (same integer N, different prefix).
 - PostgreSQL and SQLite are SEPARATE databases — you CANNOT join them in a single SQL query. Run each query independently and merge results in Python.

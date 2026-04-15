@@ -301,7 +301,11 @@ class AgentCore:
                            for sq in sub_queries]
         else:
             # Generic multi-DB path — handles postgresql+sqlite, and any other combination
-            pg_sq   = next((sq for sq in sub_queries if sq.database_type == "postgresql"), None)
+            pg_sq   = next(
+                (sq for sq in sub_queries
+                 if sq.database_type in ("postgresql", "postgresql_bookreview")),
+                None,
+            )
             sql_sq  = next((sq for sq in sub_queries if sq.database_type == "sqlite"), None)
 
             if pg_sq and sql_sq:
@@ -331,10 +335,23 @@ class AgentCore:
                         pass
 
                 sql_result, sql_corr = self._execute_with_retry(sql_sq, request.question)
-                raw_results["sqlite"] = sql_result
                 self_corrections.extend(sql_corr)
-                sub_queries = [pg_sq if sq.database_type == "postgresql" else sql_sq
-                               for sq in sub_queries]
+
+                # Python merge: join PostgreSQL book metadata with SQLite avg_rating results.
+                # review.purchase_id = "purchaseid_N" matches books_info.book_id = "bookid_N".
+                merged_books = _merge_pg_sqlite_results(pg_result, sql_result)
+                if merged_books:
+                    raw_results["books"] = merged_books
+                    raw_results.pop("postgresql", None)
+                else:
+                    # No matches — keep both raw results so synthesizer can explain
+                    raw_results["sqlite"] = sql_result
+
+                sub_queries = [
+                    pg_sq if sq.database_type in ("postgresql", "postgresql_bookreview")
+                    else sql_sq
+                    for sq in sub_queries
+                ]
             else:
                 for sq in sub_queries:
                     result, corrections = self._execute_with_retry(sq, request.question)
@@ -428,7 +445,7 @@ class AgentCore:
     def _generate_sqlite_with_ids(self, question: str, schema: str, purchase_ids_sql: str) -> str:
         """Generate a SQLite query filtered to specific purchase_ids from PostgreSQL results."""
         prompt = f"""Generate a SQLite query for this question.
-The books have already been filtered by PostgreSQL. Now filter the reviews for those books.
+The books have already been filtered by PostgreSQL. Now compute per-book rating metrics.
 The query MUST use: WHERE purchase_id IN ({purchase_ids_sql})
 
 Schema:
@@ -439,9 +456,11 @@ Question: {question}
 Rules:
 - Use purchase_id IN (...) as the primary filter — this is mandatory
 - Apply ALL other filters from the question (rating threshold, date range, etc.)
-- For rating filters: GROUP BY title, HAVING AVG(rating) >= threshold
+- For rating filters: GROUP BY purchase_id HAVING AVG(rating) >= threshold  (or = 5.0 for perfect)
 - For date filters: use strftime('%Y', review_time) >= 'YEAR'
-- Return title and any computed metrics (avg_rating, etc.)
+- CRITICAL: Return purchase_id and AVG(rating) as avg_rating ONLY — do NOT select the title
+  column (review.title is a review headline written by users, NOT the book title;
+  book titles come from PostgreSQL and will be joined back in Python)
 - Return only the SQL query, no explanation, no markdown code fences"""
         raw = llm_client.call(self.client, prompt,
                               system=self.ctx.get_full_context(), max_tokens=512)
@@ -453,7 +472,7 @@ Rules:
     def _synthesize(self, question: str, raw_results: dict) -> str:
         enriched = _augment_with_category_aggregation(raw_results)
         prompt = self.prompts.synthesize_response(question, enriched, {})
-        return llm_client.call(self.client, prompt, max_tokens=512)
+        return llm_client.call(self.client, prompt, max_tokens=1024)
 
     def _log_run(self, request: QueryRequest, response: AgentResponse,
                  intent: dict, sub_queries: list[SubQuery], self_corrections: list[dict]):
@@ -884,3 +903,54 @@ def _extract_pg_ids(pg_result) -> list[str]:
                 seen.add(n)
                 ids.append(n)
     return ids
+
+
+def _merge_pg_sqlite_results(pg_result, sqlite_result) -> list[dict]:
+    """Join PostgreSQL book metadata with SQLite per-book rating metrics.
+
+    Matches bookid_N (PostgreSQL books_info.book_id) with purchaseid_N
+    (SQLite review.purchase_id) via the shared integer suffix N.
+
+    Returns combined rows: [{book_id, title, ..., avg_rating}, ...] for
+    books that appear in BOTH result sets (inner join — SQLite already filtered
+    by rating/date thresholds, so only qualifying books are present).
+    """
+    pg_rows = pg_result if isinstance(pg_result, list) else pg_result.get("rows", [])
+    sql_rows = sqlite_result if isinstance(sqlite_result, list) else sqlite_result.get("rows", [])
+
+    # Build PostgreSQL lookup by integer N
+    pg_by_n: dict[str, dict] = {}
+    for row in pg_rows:
+        if not isinstance(row, dict):
+            continue
+        book_id = row.get("book_id", "")
+        if isinstance(book_id, str) and book_id.startswith("bookid_"):
+            n = book_id.split("bookid_", 1)[1]
+            pg_by_n[n] = row
+
+    if not pg_by_n:
+        return []
+
+    # Build SQLite lookup by integer N
+    sql_by_n: dict[str, dict] = {}
+    for row in sql_rows:
+        if not isinstance(row, dict):
+            continue
+        purchase_id = row.get("purchase_id", "")
+        if isinstance(purchase_id, str) and purchase_id.startswith("purchaseid_"):
+            n = purchase_id.split("purchaseid_", 1)[1]
+            sql_by_n[n] = row
+
+    if not sql_by_n:
+        return []
+
+    # Inner join: keep books that appear in SQLite result (passed rating/date filter)
+    merged = []
+    for n, sql_row in sql_by_n.items():
+        if n in pg_by_n:
+            combined = {
+                **pg_by_n[n],
+                **{k: v for k, v in sql_row.items() if k != "purchase_id"},
+            }
+            merged.append(combined)
+    return merged

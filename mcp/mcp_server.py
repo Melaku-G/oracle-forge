@@ -44,6 +44,8 @@ MONGO_DB   = "yelp_db"
 SQLITE_PATH = os.getenv("SQLITE_PATH", "db/dab_sqlite.db")
 DUCKDB_PATH = os.getenv("DUCKDB_PATH", "db/yelp_user.db")
 
+BOOKREVIEW_POSTGRES_DB   = os.getenv("BOOKREVIEW_POSTGRES_DB", "bookreview")
+
 # Module-level MongoDB client — connection pool shared across all requests
 _mongo_client: Optional[MongoClient] = None
 
@@ -81,6 +83,11 @@ TOOLS = [
     {
         "name": "duckdb_query",
         "description": "Executes analytical SQL against the DAB DuckDB database.",
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "bookreview_query",
+        "description": "Executes SQL against the PostgreSQL Bookreview books database.",
         "parameters": {"sql": {"type": "string"}},
     },
     {
@@ -187,12 +194,13 @@ def _rpc_error(req_id: Any, code: int, message: str) -> dict:
 
 def _dispatch(tool_name: str, params: dict) -> Any:
     handlers = {
-        "postgres_query":  _postgres_query,
-        "mongo_aggregate": _mongo_aggregate,
-        "mongo_find":      _mongo_find,
-        "sqlite_query":    _sqlite_query,
-        "duckdb_query":    _duckdb_query,
-        "cross_db_merge":  _cross_db_merge,
+        "postgres_query":   _postgres_query,
+        "bookreview_query": _bookreview_query,
+        "mongo_aggregate":  _mongo_aggregate,
+        "mongo_find":       _mongo_find,
+        "sqlite_query":     _sqlite_query,
+        "duckdb_query":     _duckdb_query,
+        "cross_db_merge":   _cross_db_merge,
     }
     fn = handlers.get(tool_name)
     if fn is None:
@@ -211,6 +219,23 @@ def _postgres_query(params: dict) -> list[dict]:
     conn = psycopg2.connect(
         host=POSTGRES_HOST, port=POSTGRES_PORT,
         dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASS,
+        cursor_factory=psycopg2.extras.RealDictCursor,
+    )
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _bookreview_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = psycopg2.connect(
+        host=POSTGRES_HOST, port=POSTGRES_PORT,
+        dbname=BOOKREVIEW_POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASS,
         cursor_factory=psycopg2.extras.RealDictCursor,
     )
     try:

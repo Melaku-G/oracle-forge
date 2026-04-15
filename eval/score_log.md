@@ -87,3 +87,15 @@ python eval/score.py --results eval/run_logs/benchmark_yelp_<timestamp>.json
 | 20260415_125206 | yelp | 5/7 | 71% | query-pass@1 | — |
 | 20260415_125609 | yelp | 7/7 | 100% | query-pass@1 | — |
 | 20260415_125802 | yelp | 7/7 | 100% | query-pass@3 | — |
+| 20260415_150044 | yelp | 7/7 | 100% | query-pass@1 | — |
+| 20260415_150704 | bookreview | 0/3 | 0% | query-pass@1 | — |
+| 20260415_151751 | bookreview | 1/3 | 33% | query-pass@1 | — |
+| 20260415_152410 | bookreview | 1/3 | 33% | query-pass@1 | — |
+| 20260415_152534 | bookreview | 1/3 | 33% | query-pass@1 | — |
+| 20260415_152758 | bookreview | 2/3 | 67% | query-pass@1 | — |
+| 20260415_153224 | bookreview | 3/3 | 100% | query-pass@1 | — |
+| 20260415_153418 | yelp | 3/7 | 43% | query-pass@1 | — |
+| 20260415_153530 | yelp | 3/7 | 43% | query-pass@1 | — |
+| 20260415_153918 | yelp | 5/7 | 71% | query-pass@1 | — |
+| 20260415_154108 | yelp | 5/7 | 71% | query-pass@1 | — |
+| 20260415_154208 | bookreview | 3/3 | 100% | query-pass@1 | — |
