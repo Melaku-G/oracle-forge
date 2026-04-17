@@ -35,6 +35,7 @@ DOMAIN_KB  = "kb/domain/domain_terms.md"
 DATASET_DBS = {
     "yelp":         ["mongodb", "duckdb"],
     "bookreview":   ["postgresql", "sqlite"],
+    "googlelocal":  ["postgresql", "sqlite"],
     "agnews":       ["mongodb", "sqlite"],
     "crmarenapro":  ["core_crm", "sales_pipeline", "support", "products_orders", "activities", "territory"],
 }

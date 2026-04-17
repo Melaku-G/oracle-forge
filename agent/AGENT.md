@@ -156,6 +156,41 @@ These mismatches will cause silent wrong answers if not handled:
 - Use REGEXP or SUBSTRING to extract 4-digit year from `details`, then compute decade: `(year / 10) * 10`
 - PostgreSQL: `CAST(SUBSTRING(details FROM '(\d{4})') AS INTEGER) / 10 * 10`
 
+### PostgreSQL — GoogleLocal business_database (googlelocal_db)
+**Table: business_description** (~rows)
+| Field | Type | Sample Values |
+|-------|------|---------------|
+| name | text | Google Maps business name |
+| gmap_id | text | business identifier shared with SQLite review table |
+| description | text | free-text business description |
+| num_of_reviews | bigint | total number of reviews for the business |
+| hours | text | operating hours information |
+| MISC | text | miscellaneous business metadata |
+| state | text | business operating status such as open / closed / temporarily closed |
+
+**Critical rules:**
+- `gmap_id` is the join key to SQLite `review.gmap_id`.
+- `state` here means business operating status, NOT U.S. state/location.
+- `num_of_reviews` is a business-level total review count, not an average rating.
+- PostgreSQL and SQLite are SEPARATE databases — do NOT write one SQL query that references both.
+- `hours` and `MISC` may be stored as text/serialized structures; prefer simple filters over deep parsing unless required.
+
+### SQLite — GoogleLocal review_database (review_query.db)
+**Table: review** (~rows)
+| Field | Type | Sample Values |
+|-------|------|---------------|
+| name | text | reviewer name |
+| time | text | review timestamp |
+| rating | integer | 1–5 rating |
+| text | text | free-text review body |
+| gmap_id | text | business identifier shared with PostgreSQL business_description |
+
+**Critical join rule:**
+- SQLite `review.gmap_id` ↔ PostgreSQL `business_description.gmap_id`
+- Join across the two databases in Python / orchestration, not inside a single SQL statement.
+- For rating questions, use SQLite `review.rating`, not PostgreSQL `num_of_reviews`.
+- For metadata/business-description questions, use PostgreSQL `business_description`.
+
 ### CRMArena Pro — 6-database CRM dataset
 
 **DAB root:** `DataAgentBench/query_crmarenapro/query_dataset/`

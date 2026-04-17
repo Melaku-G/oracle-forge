@@ -118,3 +118,6 @@ python eval/score.py --results eval/run_logs/benchmark_yelp_<timestamp>.json
 | 20260417_094402 | bookreview | 0/3 | 0% | query-pass@1 | â€” |
 | 20260417_094505 | bookreview | 0/3 | 0% | query-pass@1 | â€” |
 | 20260417_100949 | crmarenapro | 1/13 | 8% | query-pass@1 | â€” |
+| 20260417_151153 | googlelocal | 0/4 | 0% | query-pass@1 | — |
+| 20260417_152147 | googlelocal | 0/4 | 0% | query-pass@1 | — |
+| 20260417_153738 | googlelocal | 0/4 | 0% | query-pass@1 | — |
