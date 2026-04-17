@@ -33,9 +33,10 @@ DOMAIN_KB  = "kb/domain/domain_terms.md"
 
 # Available databases per dataset
 DATASET_DBS = {
-    "yelp":       ["mongodb", "duckdb"],
-    "bookreview": ["postgresql", "sqlite"],
-    "agnews":     ["mongodb", "sqlite"],
+    "yelp":         ["mongodb", "duckdb"],
+    "bookreview":   ["postgresql", "sqlite"],
+    "agnews":       ["mongodb", "sqlite"],
+    "crmarenapro":  ["core_crm", "sales_pipeline", "support", "products_orders", "activities", "territory"],
 }
 
 
@@ -57,6 +58,7 @@ async def main():
         question=args.question,
         available_databases=available_dbs,
         session_id=args.session_id,
+        dataset=args.dataset,
     )
 
     print(f"\nQuestion : {args.question}")

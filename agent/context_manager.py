@@ -69,8 +69,51 @@ class ContextManager:
             "duckdb":                "### DuckDB",
             "postgresql":            "### PostgreSQL",
             "postgresql_bookreview": "### PostgreSQL",
+            "postgresql_crm":        "### CRMArena Pro",
             "sqlite":                "### SQLite",
+            # crmarenapro logical DB names — all point to the same CRMArena Pro section
+            "core_crm":              "### CRMArena Pro",
+            "sales_pipeline":        "### CRMArena Pro",
+            "support":               "### CRMArena Pro",
+            "products_orders":       "### CRMArena Pro",
+            "activities":            "### CRMArena Pro",
+            "territory":             "### CRMArena Pro",
         }
+        heading = heading_map.get(db_type)
+        if not heading:
+            return content
+        start = content.find(heading)
+        if start == -1:
+            return content
+        # Find the next sibling (###) or parent (##) heading after our section
+        next_h3 = content.find("\n### ", start + len(heading))
+        next_h2 = content.find("\n## ", start + 1)
+        candidates = [p for p in (next_h3, next_h2) if p != -1]
+        end = min(candidates) if candidates else len(content)
+        return content[start:end].strip()
+
+    def get_schema_for_logical_db(self, logical_name: str) -> str:
+        """Return a focused schema snippet for a specific CRM logical DB.
+        Extracts only the line from the CRMArena Pro section that describes this DB's tables.
+        """
+        full_crm = self.get_schema_for_db(logical_name)
+        # Extract just the line(s) for this logical DB from the table fields section
+        lines = full_crm.split("\n")
+        result = []
+        in_section = False
+        for line in lines:
+            # Include header and critical rules always
+            if line.startswith("### CRMArena") or line.startswith("**DAB root") or line.startswith("**Critical"):
+                result.append(line)
+                in_section = False
+            elif line.startswith(f"`{logical_name}`"):
+                result.append(line)
+                in_section = True
+            elif in_section and line.startswith("`") and not line.startswith(f"`{logical_name}`"):
+                in_section = False  # next logical DB started
+            elif in_section:
+                result.append(line)
+        return "\n".join(result) if result else full_crm
         heading = heading_map.get(db_type)
         if not heading:
             return content

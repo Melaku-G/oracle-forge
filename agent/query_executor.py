@@ -12,6 +12,7 @@ DB_TYPE_TO_TOOL = {
     "duckdb":                "duckdb_query",
     "postgresql":            "postgres_query",
     "postgresql_bookreview": "bookreview_query",
+    "postgresql_crm":        "crm_support_query",
     "sqlite":                "sqlite_query",
 }
 
@@ -92,7 +93,10 @@ class QueryExecutor:
             serialized = pipeline if isinstance(pipeline, str) else json.dumps(pipeline)
             return {"collection": collection, "pipeline": serialized}
 
-        return {"sql": sub_query.query}
+        args: dict = {"sql": sub_query.query}
+        if sub_query.db_path:
+            args["db_path"] = sub_query.db_path
+        return args
 
     def merge(self, left: dict, right: dict, left_key: str, right_key: str,
               left_db: str, right_db: str) -> dict:

@@ -156,6 +156,48 @@ These mismatches will cause silent wrong answers if not handled:
 - Use REGEXP or SUBSTRING to extract 4-digit year from `details`, then compute decade: `(year / 10) * 10`
 - PostgreSQL: `CAST(SUBSTRING(details FROM '(\d{4})') AS INTEGER) / 10 * 10`
 
+### CRMArena Pro — 6-database CRM dataset
+
+**DAB root:** `DataAgentBench/query_crmarenapro/query_dataset/`
+
+| Logical DB name | DB type | File / PG database | Key tables |
+|---|---|---|---|
+| `core_crm` | SQLite | `core_crm.db` | User, Account, Contact |
+| `sales_pipeline` | DuckDB | `sales_pipeline.duckdb` | Opportunity, Contract, Lead, Quote, OpportunityLineItem, QuoteLineItem |
+| `support` | PostgreSQL | `crm_support` | Case, knowledge__kav, issue__c, casehistory__c, emailmessage, livechattranscript |
+| `products_orders` | SQLite | `products_orders.db` | Product2, Order, OrderItem, Pricebook2, PricebookEntry, ProductCategory, ProductCategoryProduct |
+| `activities` | DuckDB | `activities.duckdb` | Event, Task, VoiceCallTranscript__c |
+| `territory` | SQLite | `territory.db` | Territory2, UserTerritory2Association |
+
+**Table fields per logical DB:**
+
+`core_crm` — User: Id, FirstName, LastName, Email, Phone, Username, Alias | Account: Id, Name, Phone, Industry, NumberOfEmployees, ShippingState | Contact: Id, FirstName, LastName, Email, AccountId
+
+`sales_pipeline` — Opportunity: Id, ContractID__c, AccountId, ContactId, OwnerId, Probability, Amount, StageName, Name, CreatedDate, CloseDate | Contract: Id, AccountId, Status, StartDate, CustomerSignedDate, CompanySignedDate, ContractTerm | Lead: Id, FirstName, LastName, Email, Company, Status, ConvertedContactId, ConvertedAccountId, OwnerId, CreatedDate, ConvertedDate, IsConverted | Quote: Id, OpportunityId, AccountId, ContactId, Name, Status, CreatedDate, ExpirationDate | OpportunityLineItem: Id, OpportunityId, Product2Id, PricebookEntryId, Quantity, TotalPrice | QuoteLineItem: Id, QuoteId, OpportunityLineItemId, Product2Id, PricebookEntryId, Quantity, UnitPrice, Discount, TotalPrice
+
+`support` — Case: id, priority, subject, description, status, contactid, createddate, closeddate, orderitemid__c, issueid__c, accountid, ownerid | knowledge__kav: id, title, faq_answer__c, summary, urlname | issue__c: id, name, description__c | casehistory__c: id, caseid__c, oldvalue__c, newvalue__c, createddate, field__c | emailmessage: id, subject, textbody, parentid, fromaddress, toids, messagedate | livechattranscript: id, caseid, accountid, ownerid, body, endtime, contactid
+
+`products_orders` — Product2: Id, Name, Description, IsActive, External_ID__c | Order: Id, AccountId, Status, EffectiveDate, Pricebook2Id, OwnerId | OrderItem: Id, OrderId, Product2Id, Quantity, UnitPrice, PriceBookEntryId | Pricebook2: Id, Name, IsActive, ValidFrom, ValidTo | PricebookEntry: Id, Pricebook2Id, Product2Id, UnitPrice | ProductCategory: Id, Name, CatalogId | ProductCategoryProduct: Id, ProductCategoryId, ProductId
+
+`activities` — Event: Id, WhatId, OwnerId, StartDateTime, Subject, Description, DurationInMinutes | Task: Id, WhatId, OwnerId, Priority, Status, ActivityDate, Subject, Description | VoiceCallTranscript__c: Id, OpportunityId__c, LeadId__c, Body__c, CreatedDate, EndTime__c
+
+`territory` — Territory2: Id, Name, Description | UserTerritory2Association: Id, UserId, Territory2Id
+
+**Critical rules:**
+- **ID FORMAT — `#` prefix**: ~25% of all IDs across ALL tables have a leading `#` character (e.g. `#005Wt000003NJZhIAO`). ALWAYS strip before joins: SQLite/DuckDB: `TRIM(REPLACE(col, '#', ''))` | PostgreSQL: `TRIM(REPLACE(col, chr(35), ''))` (use `chr(35)` not `'#'` in PostgreSQL REPLACE).
+- **Never use raw ID equality** across tables — always normalize both sides.
+- **DATE FIELDS are stored as TEXT** in format `'2023-07-02T11:00:00.000+0000'`. In PostgreSQL cast with `::timestamp` before comparing: `createddate::timestamp >= TIMESTAMP '2023-09-02' - INTERVAL '4 months'`. In SQLite/DuckDB use string comparison: `createddate >= '2023-09-02'` (ISO prefix match works).
+- `support` uses PostgreSQL — table names are case-sensitive: always double-quote `"Case"`, `"knowledge__kav"`, `"issue__c"`, `"casehistory__c"`. Column names are lowercase — no quoting needed.
+- `sales_pipeline` and `activities` are DuckDB — no quoting needed.
+- `core_crm`, `products_orders`, `territory` are SQLite — no quoting needed.
+- VoiceCallTranscript__c.Body__c contains free-text call transcripts — use LIKE/ILIKE for BANT analysis.
+- knowledge__kav.faq_answer__c contains policy text — search with ILIKE for policy violations.
+- casehistory__c.field__c values: `'Case Creation'`, `'Owner Assignment'`, `'Case Closed'`. Count `'Owner Assignment'` entries per case to detect transfers. Cases with exactly ONE `'Owner Assignment'` have NOT been transferred.
+- casehistory__c.newvalue__c = agent Id for `'Owner Assignment'` rows.
+- Case handle time = `closeddate::timestamp - createddate::timestamp` (PostgreSQL). Only for closed cases where closeddate IS NOT NULL.
+- Contract has NO OwnerId — to get the agent for a contract, join via `Opportunity.ContractID__c = Contract.Id` and use `Opportunity.OwnerId`.
+- **Cross-DB joins**: run each logical DB separately. Pass IDs from one result as an IN-list filter to the next query. Do NOT write a single SQL query that references tables from two different logical databases.
+
 ## Behavioral Rules
 1. Always produce a query trace — never return an answer without it
 2. Self-correct on execution failure — retry up to 3 times with diagnosis

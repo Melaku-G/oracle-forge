@@ -3,6 +3,7 @@ import os
 import re
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 from agent import llm_client
 from agent.context_manager import ContextManager
@@ -10,6 +11,25 @@ from agent.models import AgentResponse, QueryRequest, QueryTrace, SubQuery
 from agent.prompt_library import PromptLibrary
 from agent.query_executor import QueryExecutor
 from agent.self_corrector import SelfCorrector
+
+_DAB_ROOT = Path(os.getenv("DAB_ROOT", Path(__file__).resolve().parents[1] / "DataAgentBench"))
+
+# CRMArena Pro db_paths (like BOOKREVIEW_POSTGRES_DB in mcp_server.py)
+CRM_CORE_CRM_PATH = str(_DAB_ROOT / "query_crmarenapro/query_dataset/core_crm.db")
+CRM_SALES_PIPELINE_PATH = str(_DAB_ROOT / "query_crmarenapro/query_dataset/sales_pipeline.duckdb")
+CRM_PRODUCTS_ORDERS_PATH = str(_DAB_ROOT / "query_crmarenapro/query_dataset/products_orders.db")
+CRM_ACTIVITIES_PATH = str(_DAB_ROOT / "query_crmarenapro/query_dataset/activities.duckdb")
+CRM_TERRITORY_PATH = str(_DAB_ROOT / "query_crmarenapro/query_dataset/territory.db")
+
+# Map logical DB name → (db_type, db_path) for crmarenapro
+CRM_DB_MAP = {
+    "core_crm":       ("sqlite", CRM_CORE_CRM_PATH),
+    "sales_pipeline": ("duckdb", CRM_SALES_PIPELINE_PATH),
+    "support":        ("postgresql_crm", None),
+    "products_orders":("sqlite", CRM_PRODUCTS_ORDERS_PATH),
+    "activities":     ("duckdb", CRM_ACTIVITIES_PATH),
+    "territory":      ("sqlite", CRM_TERRITORY_PATH),
+}
 
 
 class AgentCore:
@@ -21,66 +41,65 @@ class AgentCore:
         self.corrector = SelfCorrector(prompt_library, self.client)
         self.executor = QueryExecutor()
 
-    def analyze_intent(self, question: str, available_databases: list[str]) -> dict:
-        """Call LLM to identify which DBs to query and extract structured intent.
-
-        Returns: {"target_databases": [...], "intent_summary": str,
-                  "requires_join": bool, "data_fields_needed": [...]}
-        """
+    def analyze_intent(self, question: str, available_databases: list[str],
+                       dataset: str = "") -> dict:
+        """Call LLM to identify which DBs to query and extract structured intent."""
         system_context = self.ctx.get_full_context()
         prompt = self.prompts.intent_analysis(question, available_databases)
         text = llm_client.call(self.client, prompt, system=system_context, max_tokens=1024)
         intent = json.loads(_strip_markdown(text))
-        return _enforce_intent_db_coverage(question, available_databases, intent)
+        return _enforce_intent_db_coverage(question, available_databases, intent, dataset)
 
-    def decompose_query(self, question: str, intent: dict) -> list[SubQuery]:
+    def decompose_query(self, question: str, intent: dict,
+                        dataset: str = "") -> list[SubQuery]:
         """Break multi-DB intent into one SubQuery per target database."""
         requires_join = intent.get("requires_join", False)
         join_direction = intent.get("join_direction", "mongodb_first")
+        registry = CRM_DB_MAP if dataset == "crmarenapro" else {}
         sub_queries = []
-        for db_type in intent.get("target_databases", []):
+
+        for db_name in intent.get("target_databases", []):
+            # Resolve logical name → db_type + db_path if in registry
+            if db_name in registry:
+                db_type, db_path = registry[db_name]
+            else:
+                db_type = db_name  # already a db_type string
+                db_path = None
+
             if requires_join and join_direction == "mongodb_first" and db_type == "duckdb":
-                # Placeholder — DuckDB query regenerated with business_refs after MongoDB runs
                 sub_queries.append(SubQuery(
-                    database_type=db_type,
-                    query="SELECT 1",
-                    intent=intent.get("intent_summary", question),
+                    database_type=db_type, query="SELECT 1",
+                    intent=intent.get("intent_summary", question), db_path=db_path,
+                    logical_name=db_name if db_name in registry else None,
                 ))
             elif requires_join and join_direction == "duckdb_first" and db_type == "mongodb":
-                # Placeholder — MongoDB query regenerated with business_ids after DuckDB runs
-                _placeholder_query = (
-                    '[{"$collection": "business"}, '
-                    '{"$project": {"business_id": 1, "name": 1, "description": 1}}]'
-                )
                 sub_queries.append(SubQuery(
                     database_type=db_type,
-                    query=_placeholder_query,
-                    intent=intent.get("intent_summary", question),
+                    query='[{"$collection": "business"}, {"$project": {"business_id": 1, "name": 1, "description": 1}}]',
+                    intent=intent.get("intent_summary", question), db_path=db_path,
+                    logical_name=db_name if db_name in registry else None,
                 ))
             elif requires_join and join_direction == "duckdb_first" and db_type == "duckdb":
-                # Placeholder — DuckDB query will be generated/overridden in run() once
-                # the direction is confirmed and the correct template is chosen (e.g.
-                # deterministic user-category query). This prevents a LLM ValueError here
-                # from crashing the whole run before run() can apply the right override.
                 sub_queries.append(SubQuery(
-                    database_type=db_type,
-                    query="SELECT 1",
-                    intent=intent.get("intent_summary", question),
+                    database_type=db_type, query="SELECT 1",
+                    intent=intent.get("intent_summary", question), db_path=db_path,
+                    logical_name=db_name if db_name in registry else None,
                 ))
             else:
                 try:
-                    query = self._generate_query_for_db(question, db_type, intent)
+                    # For registry logical names, use the full CRM schema context
+                    if db_name in registry:
+                        query = self._generate_query_for_logical_db(question, db_name, db_type, intent)
+                    else:
+                        query = self._generate_query_for_db(question, db_type, intent)
                 except ValueError:
-                    # LLM returned unparseable output — use a safe no-op placeholder so
-                    # the run() orchestration can still decide what to do.
                     query = "SELECT 1" if db_type != "mongodb" else (
-                        '[{"$collection": "business"}, '
-                        '{"$project": {"business_id": 1, "name": 1, "description": 1}}]'
+                        '[{"$collection": "business"}, {"$project": {"business_id": 1, "name": 1, "description": 1}}]'
                     )
                 sub_queries.append(SubQuery(
-                    database_type=db_type,
-                    query=query,
-                    intent=intent.get("intent_summary", question),
+                    database_type=db_type, query=query,
+                    intent=intent.get("intent_summary", question), db_path=db_path,
+                    logical_name=db_name if db_name in registry else None,
                 ))
         return sub_queries
 
@@ -115,15 +134,150 @@ class AgentCore:
             f"Could not generate a valid {db_type} query after 3 attempts. Last error: {last_error}"
         ) from last_error
 
+    def _crm_second_pass(self, question: str, sub_queries: list,
+                          raw_results: dict, dataset: str) -> tuple[dict, list, list]:
+        """For registry datasets: use successful results to re-query DBs that failed or returned empty.
+        Returns (updated_raw_results, extra_corrections, extra_merges).
+        """
+        corrections = []
+        merges = []
+        registry = CRM_DB_MAP if dataset == "crmarenapro" else {}
+
+        # Collect successful results (non-error, non-empty)
+        good_results = {
+            k: v for k, v in raw_results.items()
+            if not (isinstance(v, dict) and "error" in v) and v
+        }
+        if not good_results:
+            return raw_results, corrections, merges
+
+        # For each sub-query that failed or returned empty, try a second-pass query
+        # with the successful results as context in the prompt
+        context_summary = json.dumps(
+            {k: (v[:3] if isinstance(v, list) else v) for k, v in good_results.items()},
+            default=str
+        )[:1500]
+
+        for sq in sub_queries:
+            result_key = _logical_name_from_path(sq.db_path) or sq.database_type
+            current = raw_results.get(result_key)
+            failed = isinstance(current, dict) and "error" in current
+            empty = isinstance(current, list) and len(current) == 0
+
+            # Only retry actual errors, not empty results — empty is a valid answer
+            if not failed:
+                continue
+
+            logical_name = _logical_name_from_path(sq.db_path) or result_key
+            if logical_name not in registry:
+                continue
+
+            db_type, _ = registry[logical_name]
+            schema = self.ctx.get_schema_for_logical_db(logical_name)
+            dialect = "duckdb" if db_type == "duckdb" else ("postgresql" if "postgresql" in db_type else "sqlite")
+
+            retry_prompt = self.prompts.nl_to_sql(question, schema, dialect=dialect)
+            retry_prompt += (
+                f"\n\nYou are querying the '{logical_name}' database. "
+                f"Only reference tables that belong to '{logical_name}'. "
+                f"Do NOT reference any Yelp, MongoDB, review, business, checkin, or tip tables."
+                f"\n\nResults already retrieved from other databases (use these to filter/join):\n{context_summary}"
+                f"\n\nGenerate a query that uses the above results to answer the question. "
+                f"Do NOT reference tables from other databases in this query."
+            )
+
+            try:
+                raw = llm_client.call(self.client, retry_prompt,
+                                      system=schema, max_tokens=512)
+                new_query = _strip_markdown(raw)
+                allowed_tables = {
+                    "core_crm": {"user", "account", "contact"},
+                    "sales_pipeline": {"opportunity", "contract", "lead", "quote", "opportunitylineitem", "quotelineitem"},
+                    "support": {"case", "knowledge__kav", "issue__c", "casehistory__c", "emailmessage", "livechattranscript"},
+                    "products_orders": {"product2", "order", "orderitem", "pricebook2", "pricebookentry", "productcategory", "productcategoryproduct"},
+                    "activities": {"event", "task", "voicecalltranscript__c"},
+                    "territory": {"territory2", "userterritory2association"},
+                }.get(logical_name, set())
+                forbidden_in_query = {"review", "business", "tip", "checkin"} - allowed_tables
+                q_lower = new_query.lower()
+                has_forbidden = any(re.search(rf'\b{t}\b', q_lower) for t in forbidden_in_query)
+                if (_looks_like_query(new_query, db_type) and not has_forbidden):
+                    new_sq = type(sq)(
+                        database_type=sq.database_type,
+                        query=new_query,
+                        intent=sq.intent,
+                        db_path=sq.db_path,
+                    )
+                    result, corr = self._execute_with_retry(new_sq, question)
+                    # Only overwrite if the new result is not an error
+                    if not (isinstance(result, dict) and "error" in result):
+                        raw_results[result_key] = result
+                        corrections.extend(corr)
+                        merges.append(f"second-pass {logical_name} using context from {list(good_results.keys())}")
+            except Exception:
+                pass  # keep original failed result
+
+        return raw_results, corrections, merges
+
+    def _generate_query_for_logical_db(self, question: str, logical_name: str,
+                                        db_type: str, intent: dict) -> str:
+        """Generate a query for a specific logical DB (e.g. 'activities', 'sales_pipeline').
+        Schema knowledge lives in AGENT.md (CRMArena Pro section) — no hardcoded table lists here.
+        """
+        schema = self.ctx.get_schema_for_logical_db(logical_name)  # focused schema for this DB only
+        # Use only the CRM schema section as system context to prevent Yelp bleed-through
+        system_context = schema
+        dialect = "duckdb" if db_type == "duckdb" else ("postgresql" if "postgresql" in db_type else "sqlite")
+
+        prompt = self.prompts.nl_to_sql(question, schema, dialect=dialect)
+        prompt += (
+            f"\n\nYou are querying the '{logical_name}' database specifically. "
+            f"Only reference tables that belong to '{logical_name}' as documented in the schema above. "
+            f"Do NOT reference any Yelp, MongoDB, review, business, checkin, or tip tables."
+        )
+
+        last_error = None
+        for attempt in range(3):
+            p = prompt
+            if attempt > 0 and last_error:
+                p += f"\n\nPrevious attempt rejected: {last_error}. Fix and return only a valid {dialect} query."
+            raw = llm_client.call(self.client, p, system=system_context, max_tokens=512)
+            cleaned = _strip_markdown(raw)
+            try:
+                if not _looks_like_query(cleaned, db_type):
+                    raise ValueError(f"LLM returned non-query for {logical_name}: {cleaned[:120]}")
+                # Block Yelp table references and cross-DB table references
+                forbidden = {"review", "business", "tip", "checkin", "case", "casehistory__c",
+                             "knowledge__kav", "issue__c", "emailmessage", "livechattranscript"}
+                # Only block tables that don't belong to this logical DB
+                crm_tables = {
+                    "core_crm": {"user", "account", "contact"},
+                    "sales_pipeline": {"opportunity", "contract", "lead", "quote", "opportunitylineitem", "quotelineitem"},
+                    "support": {"case", "knowledge__kav", "issue__c", "casehistory__c", "emailmessage", "livechattranscript"},
+                    "products_orders": {"product2", "order", "orderitem", "pricebook2", "pricebookentry", "productcategory", "productcategoryproduct"},
+                    "activities": {"event", "task", "voicecalltranscript__c"},
+                    "territory": {"territory2", "userterritory2association"},
+                }
+                allowed = crm_tables.get(logical_name, set())
+                q_lower = cleaned.lower()
+                bad_tables = forbidden - allowed
+                if any(re.search(rf'\b{t}\b', q_lower) for t in bad_tables):
+                    raise ValueError(f"Query for '{logical_name}' references tables from another DB. Allowed: {allowed}")
+                return cleaned
+            except ValueError as exc:
+                last_error = exc
+        raise ValueError(f"Could not generate query for {logical_name} after 3 attempts. Last: {last_error}")
+
     async def run(self, request: QueryRequest, query_executor=None) -> AgentResponse:
         """Main orchestration loop: analyze → decompose → execute → synthesize → log."""
         self_corrections: list[dict] = []
         raw_results: dict = {}
         merge_operations: list[str] = []
+        dataset = request.dataset or ""
 
-        intent = self.analyze_intent(request.question, request.available_databases)
+        intent = self.analyze_intent(request.question, request.available_databases, dataset)
         is_category_q = intent.get("is_category_question", False)
-        sub_queries = self.decompose_query(request.question, intent)
+        sub_queries = self.decompose_query(request.question, intent, dataset)
 
         mongo_sq = next((sq for sq in sub_queries if sq.database_type == "mongodb"), None)
         duck_sq  = next((sq for sq in sub_queries if sq.database_type == "duckdb"),  None)
@@ -395,7 +549,7 @@ class AgentCore:
             sub_queries = [mongo_sq if sq.database_type == "mongodb" else duck_sq
                            for sq in sub_queries]
         else:
-            # Generic multi-DB path — handles postgresql+sqlite, and any other combination
+            # Generic multi-DB path — handles postgresql+sqlite (bookreview), and any other combination
             pg_sq   = next(
                 (sq for sq in sub_queries
                  if sq.database_type in ("postgresql", "postgresql_bookreview")),
@@ -403,6 +557,9 @@ class AgentCore:
             )
             sql_sq  = next((sq for sq in sub_queries if sq.database_type == "sqlite"), None)
 
+            # Only apply the bookreview-specific pg→sqlite join when it's actually bookreview.
+            # crmarenapro uses postgresql_crm which is excluded from pg_sq above, so it falls
+            # through to the generic loop below.
             if pg_sq and sql_sq:
                 # PostgreSQL-first: get IDs from PostgreSQL, filter SQLite by those IDs
                 pg_result, pg_corr = self._execute_with_retry(pg_sq, request.question)
@@ -448,10 +605,29 @@ class AgentCore:
                     for sq in sub_queries
                 ]
             else:
+                # Generic multi-DB path — for crmarenapro and other multi-file datasets,
+                # execute each sub-query and store results keyed by logical DB name.
+                # Results from earlier queries are passed as context to the synthesizer.
                 for sq in sub_queries:
                     result, corrections = self._execute_with_retry(sq, request.question)
-                    raw_results[sq.database_type] = result
+                    # Use logical DB name as key if available (from db_path), else db_type
+                    result_key = _logical_name_from_path(sq.db_path) or sq.database_type
+                    raw_results[result_key] = result
                     self_corrections.extend(corrections)
+
+                # For registry datasets (e.g. crmarenapro): do a second pass where
+                # successful results are used as context to re-query failed DBs.
+                # Only run if there are actual errors (not just empty results).
+                has_errors = any(
+                    isinstance(v, dict) and "error" in v
+                    for v in raw_results.values()
+                )
+                if dataset in ("crmarenapro",) and has_errors:
+                    raw_results, extra_corrections, extra_merges = self._crm_second_pass(
+                        request.question, sub_queries, raw_results, dataset
+                    )
+                    self_corrections.extend(extra_corrections)
+                    merge_operations.extend(extra_merges)
 
         answer = self._synthesize(request.question, raw_results)
 
@@ -472,7 +648,9 @@ class AgentCore:
         """Execute a sub-query, retrying up to max_retries on failure with self-correction."""
         corrections = []
         current_query = sub_query.query
-        schema = self.ctx.get_schema_for_db(sub_query.database_type)
+        # Use logical_name for schema lookup if present (CRM datasets), else fall back to db_type
+        schema_key = sub_query.logical_name if sub_query.logical_name else sub_query.database_type
+        schema = self.ctx.get_schema_for_db(schema_key)
 
         for attempt in range(self.corrector.max_retries + 1):
             try:
@@ -607,6 +785,63 @@ Rules:
 
 
 _MARKDOWN_FENCE = re.compile(r"```[\w]*\n?([\s\S]*?)```")
+
+
+def _enforce_intent_db_coverage(question: str, available_databases: list[str], intent: dict,
+                                dataset: str = "") -> dict:
+    """Normalise intent['target_databases']:
+    - Resolve logical DB names (e.g. 'sales_pipeline') to their db_type for known datasets
+    - Fall back to all available DBs if LLM returned nothing
+    - For non-crm datasets, ensure all available DBs are included
+    """
+    target = intent.get("target_databases") or []
+
+    # Resolve logical names for datasets in the registry
+    if dataset and bool(CRM_DB_MAP if dataset == "crmarenapro" else {}):
+        registry = CRM_DB_MAP if dataset == "crmarenapro" else {}
+        resolved = []
+        for name in target:
+            if name in registry:
+                resolved.append(name)
+            else:
+                # LLM returned a generic db_type — expand to all matching logical DBs
+                matches = [k for k, (db_type, _) in registry.items() if db_type == name]
+                if matches:
+                    resolved.extend(matches)
+        # If nothing resolved, default to all logical DBs for this dataset
+        if not resolved:
+            resolved = list(registry.keys())
+        intent["target_databases"] = resolved
+        return intent
+
+    # Non-registry datasets: ensure all available DBs are covered
+    if not target:
+        intent["target_databases"] = list(available_databases)
+    else:
+        for db in available_databases:
+            if db not in target:
+                target.append(db)
+        intent["target_databases"] = target
+    return intent
+
+
+def _logical_name_from_path(db_path: str | None) -> str | None:
+    """Extract logical DB name from a file path (e.g. '.../core_crm.db' → 'core_crm')."""
+    if not db_path:
+        return None
+    stem = Path(db_path).stem  # e.g. 'core_crm', 'sales_pipeline', 'activities'
+    return stem
+
+
+def _validate_query_semantics(question: str, db_type: str, query: str) -> None:
+    """Raise ValueError if the query has obvious semantic problems for the given db_type.
+    Currently checks that DuckDB queries don't reference MongoDB-only tables."""
+    q = query.strip().lower()
+    if db_type == "duckdb" and "business" in q and "from business" in q:
+        raise ValueError(
+            "DuckDB query references 'business' table which only exists in MongoDB. "
+            "Use review/user/tip tables for DuckDB."
+        )
 
 
 def _strip_markdown(text: str) -> str:

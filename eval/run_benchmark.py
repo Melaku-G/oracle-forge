@@ -70,9 +70,10 @@ CORRECTIONS = "kb/corrections/corrections_log.md"
 DOMAIN_KB   = "kb/domain/domain_terms.md"
 
 DATASET_DBS = {
-    "yelp":       ["mongodb", "duckdb"],
-    "bookreview": ["postgresql_bookreview", "sqlite"],
-    "agnews":     ["mongodb", "sqlite"],
+    "yelp":         ["mongodb", "duckdb"],
+    "bookreview":   ["postgresql_bookreview", "sqlite"],
+    "agnews":       ["mongodb", "sqlite"],
+    "crmarenapro":  ["core_crm", "sales_pipeline", "support", "products_orders", "activities", "territory"],
 }
 
 
@@ -130,11 +131,12 @@ def build_agent() -> AgentCore:
 
 
 async def run_one(agent: AgentCore, question: str, available_dbs: list[str],
-                  session_id: str) -> str:
+                  session_id: str, dataset: str = "yelp") -> str:
     request = QueryRequest(
         question=question,
         available_databases=available_dbs,
         session_id=session_id,
+        dataset=dataset,
     )
     response = await agent.run(request)
     return response.answer
@@ -174,7 +176,7 @@ async def main():
             agent = build_agent()  # fresh agent per trial to reset session history
             session_id = f"{args.dataset}-{qid}-t{trial}"
             try:
-                answer = await run_one(agent, question, available_dbs, session_id)
+                answer = await run_one(agent, question, available_dbs, session_id, dataset=args.dataset)
                 print(f"  Trial {trial+1} answer: {answer[:120]}")
             except Exception as e:
                 answer = f"ERROR: {e}"

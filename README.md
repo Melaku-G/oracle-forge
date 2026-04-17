@@ -396,6 +396,44 @@ Then restart the MCP server.
 
 ---
 
+## Running the CRMArena Pro Dataset
+
+CRMArena Pro uses 6 databases across 3 DB types (SQLite × 3, DuckDB × 2, PostgreSQL × 1). The file-based DBs are read directly from the DataAgentBench clone — no extra loading needed. Only the PostgreSQL `support` database requires a one-time setup.
+
+### 1. Add to `.env`
+
+```bash
+CRM_SUPPORT_POSTGRES_DB=crm_support
+```
+
+### 2. Load the support PostgreSQL database (one-time)
+
+```bash
+# Create the database (requires sudo)
+sudo -u postgres psql -c "CREATE DATABASE crm_support OWNER oracle_forge;"
+
+# Load the schema and data
+PGPASSWORD=<your_password> psql -h 127.0.0.1 -U oracle_forge -d crm_support \
+  -f DataAgentBench/query_crmarenapro/query_dataset/support.sql
+```
+
+### 3. Restart the MCP server
+
+```bash
+fuser -k 5000/tcp
+source .venv/bin/activate && uvicorn mcp.mcp_server:app --port 5000
+```
+
+### 4. Run the benchmark
+
+```bash
+PYTHONPATH=/path/to/oracle-forge python eval/run_benchmark.py --dataset crmarenapro --trials 1
+```
+
+The agent automatically resolves the 6 logical DB names (`core_crm`, `sales_pipeline`, `support`, `products_orders`, `activities`, `territory`) to their correct file paths from `CRM_DB_MAP` in `agent/agent_core.py`. No `.env` changes needed for the file-based DBs — paths are derived from `DAB_ROOT`.
+
+---
+
 
 
 | Module | What it does |

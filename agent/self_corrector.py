@@ -54,6 +54,7 @@ class SelfCorrector:
         return "unknown"
 
     def get_fix_strategy(self, failure_type: str, error: str, schema: str) -> str:
+        is_crm = "CRMArena" in schema or "VoiceCallTranscript" in schema or "knowledge__kav" in schema
         strategies = {
             "syntax_error": (
                 f"Fix SQL/query syntax. Error: {error}. "
@@ -62,9 +63,15 @@ class SelfCorrector:
             ),
             "wrong_table": (
                 f"Check schema for correct table/collection names.\nSchema:\n{schema}\n"
-                "IMPORTANT: PostgreSQL and SQLite are separate databases — "
-                "do NOT write a single SQL query that references tables from both. "
-                "Query each database independently."
+                + (
+                    "CRITICAL: Only use tables listed in the schema above for THIS specific database. "
+                    "Do NOT reference tables from other CRM databases (e.g. Case, casehistory__c belong to 'support', not other DBs). "
+                    "Do NOT use schema-qualified names like 'core_crm.User' — just use 'User'."
+                    if is_crm else
+                    "IMPORTANT: PostgreSQL and SQLite are separate databases — "
+                    "do NOT write a single SQL query that references tables from both. "
+                    "Query each database independently."
+                )
             ),
             "join_key_format": (
                 "Normalize join key types (e.g., cast integer to varchar or vice versa)"

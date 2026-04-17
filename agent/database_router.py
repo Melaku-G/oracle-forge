@@ -5,7 +5,7 @@ DATASET_DB_MAP = {
     "yelp":          {"businessinfo_database": "mongodb", "user_database": "duckdb"},
     "agnews":        {"articles_database": "mongodb",     "metadata_database": "sqlite"},
     "bookreview":    {"books_database": "postgresql",     "review_database": "sqlite"},
-    "crmarenapro":   {"core_crm": "sqlite", "sales_pipeline": "duckdb", "support": "postgresql",
+    "crmarenapro":   {"core_crm": "sqlite", "sales_pipeline": "duckdb", "support": "postgresql_crm",
                       "products_orders": "sqlite", "activities": "duckdb", "territory": "sqlite"},
     "googlelocal":   {"business_database": "postgresql",  "review_database": "sqlite"},
     "music_brainz":  {"tracks_database": "sqlite",        "sales_database": "duckdb"},

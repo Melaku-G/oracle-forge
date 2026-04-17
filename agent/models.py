@@ -7,12 +7,15 @@ class QueryRequest(BaseModel):
     question: str
     available_databases: list[str]
     session_id: str
+    dataset: Optional[str] = None  # e.g. "crmarenapro" — used for db_path injection
 
 
 class SubQuery(BaseModel):
-    database_type: str  # "postgresql" | "sqlite" | "mongodb" | "duckdb"
+    database_type: str  # "postgresql" | "sqlite" | "mongodb" | "duckdb" | "postgresql_crm"
     query: str
     intent: str
+    db_path: Optional[str] = None       # for datasets with multiple SQLite/DuckDB files
+    logical_name: Optional[str] = None  # e.g. "activities", "support" — used for schema lookup
 
 
 class QueryTrace(BaseModel):

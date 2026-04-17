@@ -4,31 +4,52 @@ import json
 class PromptLibrary:
 
     def intent_analysis(self, question: str, available_databases: list[str]) -> str:
+        # For crmarenapro, available_databases contains logical DB names — tell the LLM to use them
+        crm_logical = {"core_crm", "sales_pipeline", "support", "products_orders", "activities", "territory"}
+        is_crm = bool(set(available_databases) & crm_logical)
+
+        if is_crm:
+            routing_rules = """ROUTING RULES for CRMArena Pro — use the logical DB names exactly as listed:
+- core_crm (SQLite): User, Account, Contact — use for user/account/contact lookups and agent name resolution
+- sales_pipeline (DuckDB): Opportunity, Contract, Lead, Quote, OpportunityLineItem, QuoteLineItem — use for sales pipeline, quotes, contracts
+- support (PostgreSQL): Case, knowledge__kav, issue__c, casehistory__c, emailmessage, livechattranscript — use for ALL case/support/policy/knowledge article queries
+- products_orders (SQLite): Product2, Order, OrderItem, Pricebook2, PricebookEntry, ProductCategory — use ONLY when you need product catalog or order data directly; do NOT use for case queries
+- activities (DuckDB): Event, Task, VoiceCallTranscript__c — use for call transcripts and tasks
+- territory (SQLite): Territory2, UserTerritory2Association — use for territory data
+
+KEY ROUTING DECISIONS:
+- Questions about cases, issues, knowledge articles, policy violations → always include "support"
+- Questions about which month/period has most cases → "support" only (Case.createddate is there)
+- Questions about product-related cases → "support" (Case.orderitemid__c links to products) + "products_orders" (to get OrderItem IDs for the product)
+- Questions about agent performance on cases → "support" + "core_crm" (for User lookup)
+- Questions about sales cycle/turnaround → "sales_pipeline" (Opportunity + Contract)
+- Questions about BANT/lead qualification → "activities" (VoiceCallTranscript__c) + "sales_pipeline" (Lead)
+
+Return the EXACT logical DB names in target_databases, not generic types like "duckdb"."""
+        else:
+            routing_rules = """ROUTING RULES — use the schema in your context to determine which database holds the needed fields:
+- Route to the database that contains the fields required to answer the question
+- If the question needs data from multiple databases, include all of them and set requires_join=true
+- Use "mongodb_first" when a NoSQL attribute/location filter is the main discriminator
+- Use "duckdb_first" when DuckDB time/rating aggregation is the main discriminator
+- Use "postgresql_first" when PostgreSQL metadata is the main discriminator and SQLite holds reviews
+- Use "sqlite_first" when SQLite holds the review/rating data and the other DB holds metadata"""
+
         return f"""Analyze this data question and determine which databases to query.
 Consult the schema in your context (AGENT.md Layer 1) for the exact tables and fields for the active dataset.
 
 Question: {question}
 Available databases: {', '.join(available_databases)}
 
-ROUTING RULES — use the schema in your context to determine which database holds the needed fields:
-- Route to the database that contains the fields required to answer the question
-- If the question needs data from multiple databases, include all of them and set requires_join=true
-- Use "mongodb_first" when a NoSQL attribute/location filter is the main discriminator
-- Use "duckdb_first" when DuckDB time/rating aggregation is the main discriminator
-- Use "postgresql_first" when PostgreSQL metadata is the main discriminator and SQLite holds reviews
-- Use "sqlite_first" when SQLite holds the review/rating data and the other DB holds metadata
+{routing_rules}
 
 CATEGORY QUESTION DETECTION:
 - Set is_category_question=true when the question asks which category/type/genre of business has
-  the most of something (e.g. "which category has the most reviews", "what type of business has
-  the highest rating", "what categories are open on Sundays"). Categories are embedded in the
-  MongoDB business.description field — they are never a standalone field.
-- Set is_category_question=false for questions about a specific named category, or questions
-  that don't involve grouping or ranking by category.
+  the most of something. Set is_category_question=false otherwise.
 
 Respond with valid JSON only:
 {{
-  "target_databases": ["database_type_1", "database_type_2"],
+  "target_databases": ["db_name_1", "db_name_2"],
   "intent_summary": "brief description of what data is needed",
   "requires_join": true,
   "join_direction": "mongodb_first",
@@ -50,6 +71,23 @@ Respond with valid JSON only:
                 "\n- Do NOT apply rating filters (avg rating, rating = 5.0) in this query — "
                 "average ratings come from SQLite `review` and are applied after the join."
             )
+
+        # CRM-specific rules injected when the schema mentions CRMArena Pro
+        crm_note = ""
+        if "CRMArena Pro" in schema or "VoiceCallTranscript" in schema or "knowledge__kav" in schema:
+            crm_note = (
+                "\n- CRITICAL CRM ID RULE: ~25% of all IDs have a leading '#' character. "
+                "ALWAYS normalize IDs before comparing. "
+                "SQLite/DuckDB: `TRIM(REPLACE(col, '#', ''))` | "
+                "PostgreSQL: `TRIM(REPLACE(col, chr(35), ''))` (chr(35) = '#', empty string = two single quotes '')"
+                "\n- DATE FIELDS are stored as TEXT. PostgreSQL: cast with `::timestamp` before date math. "
+                "Example: `createddate::timestamp >= TIMESTAMP '2023-09-02' - INTERVAL '4 months'`"
+                "\n- For support (PostgreSQL): table names are case-sensitive — always double-quote: "
+                '`"Case"`, `"knowledge__kav"`, `"issue__c"`, `"casehistory__c"`'
+                "\n- Do NOT join tables from different logical databases in a single SQL query."
+                "\n- NEVER reference a 'review' table — it does not exist in any CRMArena Pro database."
+            )
+
         return f"""Generate a {dialect.upper()} query for this question.
 
 Schema:
@@ -60,7 +98,7 @@ Question: {question}
 Rules:
 - Return only the SQL query, no explanation, no markdown code fences
 - Use exact table and column names from the schema above
-- For apostrophes in string literals use doubled single quotes: 'Children''s Books' — NEVER backslash escaping{pg_note}
+- For apostrophes in string literals use doubled single quotes: 'Children''s Books' — NEVER backslash escaping{pg_note}{crm_note}
 - For {dialect}: {self._dialect_rules(dialect)}"""
 
     def nl_to_mongodb(self, question: str, collection_schema: str) -> str:
@@ -220,7 +258,7 @@ Question: {question}
 Results from databases:
 {json.dumps(truncated_results, indent=2, default=str, ensure_ascii=False)[:2000]}{duck_section}{cat_section}
 
-CRITICAL JOINING RULE:
+CRITICAL JOINING RULE (Yelp):
 - MongoDB results identify the ENTITY (state, category, business name, group)
 - DuckDB results provide the METRICS (avg_rating, review counts, dates) for that same entity
 - When DuckDB returns avg_rating without a state/name column, it applies to the group identified by MongoDB
@@ -228,6 +266,13 @@ CRITICAL JOINING RULE:
 - business_ref_N in DuckDB corresponds to business_id_N in MongoDB (e.g., businessref_9 ↔ businessid_9)
 - If MongoDB result contains "top_state", that IS the answer state — use it directly with the DuckDB metric
 - If DuckDB result contains "avg_rating" and "review_count" at the top level, those are the final pre-computed values
+
+CRITICAL JOINING RULE (CRMArena Pro — when results are keyed by logical DB name):
+- Results may be keyed by: "core_crm", "sales_pipeline", "support", "products_orders", "activities", "territory"
+- IDs across tables may have a leading '#' — treat '#005Wt...' and '005Wt...' as the SAME ID when joining
+- Join results across DBs by normalizing IDs: strip '#' and TRIM whitespace before matching
+- If one DB returned an error but another returned data, use the available data to answer
+- For agent ID questions: OwnerId in sales_pipeline/support maps to User.Id in core_crm (strip '#' from both)
 
 CATEGORY AGGREGATION RULE:
 - If results contain a "category_aggregation" key, use it directly — it's already computed.
