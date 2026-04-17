@@ -32,6 +32,7 @@ sources:
   duckdb_music_brainz:
     kind: "duckdb"
     db_path: "/home/ubuntu/shared/DataAgentBench/query_music_brainz_20k/query_dataset/sales.duckdb"
+    read_only: true
 tools:
   postgres_query:
     kind: "postgres-sql"
