@@ -45,7 +45,8 @@ SQLITE_PATH = os.getenv("SQLITE_PATH", "db/dab_sqlite.db")
 DUCKDB_PATH = os.getenv("DUCKDB_PATH", "db/yelp_user.db")
 
 BOOKREVIEW_POSTGRES_DB   = os.getenv("BOOKREVIEW_POSTGRES_DB", "bookreview")
-
+MUSIC_BRAINZ_TRACKS_PATH = os.getenv("MUSIC_BRAINZ_TRACKS_PATH", "/home/ubuntu/shared/DataAgentBench/query_music_brainz_20k/query_dataset/tracks.db")
+MUSIC_BRAINZ_SALES_PATH  = os.getenv("MUSIC_BRAINZ_SALES_PATH", "/home/ubuntu/shared/DataAgentBench/query_music_brainz_20k/query_dataset/sales.duckdb")
 # Module-level MongoDB client — connection pool shared across all requests
 _mongo_client: Optional[MongoClient] = None
 
@@ -88,6 +89,16 @@ TOOLS = [
     {
         "name": "bookreview_query",
         "description": "Executes SQL against the PostgreSQL Bookreview books database.",
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+         "name": "music_brainz_tracks_query",
+         "description": "Query music_brainz tracks SQLite database",
+         "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "music_brainz_sales_query",
+        "description": "Query music_brainz sales DuckDB database",
         "parameters": {"sql": {"type": "string"}},
     },
     {
@@ -196,6 +207,8 @@ def _dispatch(tool_name: str, params: dict) -> Any:
     handlers = {
         "postgres_query":   _postgres_query,
         "bookreview_query": _bookreview_query,
+        "music_brainz_tracks_query": _music_brainz_tracks_query,
+        "music_brainz_sales_query":  _music_brainz_sales_query,
         "mongo_aggregate":  _mongo_aggregate,
         "mongo_find":       _mongo_find,
         "sqlite_query":     _sqlite_query,
@@ -245,7 +258,28 @@ def _bookreview_query(params: dict) -> list[dict]:
     finally:
         conn.close()
 
+def _music_brainz_tracks_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = sqlite3.connect(MUSIC_BRAINZ_TRACKS_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
 
+def _music_brainz_sales_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = duckdb.connect(MUSIC_BRAINZ_SALES_PATH, read_only=True)
+    try:
+        return conn.execute(sql).fetchdf().to_dict(orient="records")
+    finally:
+        conn.close()
 def _mongo_aggregate(params: dict) -> list[dict]:
     collection = params.get("collection", "")
     if not collection:
