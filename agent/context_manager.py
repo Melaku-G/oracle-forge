@@ -93,7 +93,9 @@ class ContextManager:
             return content
         start = content.find(heading)
         if start == -1:
-            return content
+            # Heading not in AGENT.md — fall back to domain KB (e.g. dataset-specific AGENT file)
+            return self._load_layer2_domain()
+        # Find the next sibling (###) or parent (##) heading after our section
         next_h3 = content.find("\n### ", start + len(heading))
         next_h2 = content.find("\n## ", start + 1)
         candidates = [p for p in (next_h3, next_h2) if p != -1]

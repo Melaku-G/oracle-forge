@@ -58,15 +58,32 @@ DATASET_REGISTRY = {
     "DEPS_DEV_V1": DEPS_DEV_DB_MAP,
     "PANCANCER_ATLAS": PANCANCER_DB_MAP,
 }
+# Map logical DB name → (db_type, db_path) for GITHUB_REPOS
+def _get_github_repos_db_map():
+    """Logical names match DATASET_DBS['GITHUB_REPOS'] and DB_TYPE_TO_TOOL in query_executor."""
+    meta = os.getenv("SQLITE_GITHUB_PATH", "") or os.getenv("GITHUB_REPOS_METADATA_PATH", "")
+    art = os.getenv("DUCKDB_GITHUB_PATH", "") or os.getenv("GITHUB_REPOS_ARTIFACTS_PATH", "")
+    return {
+        "github_repos_metadata": ("github_repos_metadata", meta),
+        "github_repos_artifacts": ("github_repos_artifacts", art),
+    }
+
+
+def _registry_for_dataset(dataset: str) -> dict:
+    """Logical DB name → (db_type, db_path) for registry-backed datasets including GITHUB_REPOS."""
+    if not dataset:
+        return {}
+    if dataset.upper() == "GITHUB_REPOS":
+        return _get_github_repos_db_map()
+    return DATASET_REGISTRY.get(dataset, {})
 
 
 def _enforce_intent_db_coverage(
     question: str, available_databases: list[str], intent: dict, dataset: str = ""
 ) -> dict:
     """Merge LLM intent with heuristics so multi-DB questions include the right stores."""
-    # Registry datasets (CRM / DEPS / PanCancer): normalise logical DB names from LLM output
-    if dataset and bool(DATASET_REGISTRY.get(dataset, {})):
-        registry = DATASET_REGISTRY.get(dataset, {})
+    registry = _registry_for_dataset(dataset)
+    if dataset and registry:
         target_list = intent.get("target_databases") or []
         resolved: list[str] = []
         for name in target_list:
@@ -221,7 +238,7 @@ class AgentCore:
         """Break multi-DB intent into one SubQuery per target database."""
         requires_join = intent.get("requires_join", False)
         join_direction = intent.get("join_direction", "mongodb_first")
-        registry = DATASET_REGISTRY.get(dataset, {})
+        registry = _registry_for_dataset(dataset)
         sub_queries = []
 
         # Determine if any target DB is actually MongoDB (affects placeholder logic)
@@ -353,7 +370,7 @@ class AgentCore:
         """
         corrections = []
         merges = []
-        registry = DATASET_REGISTRY.get(dataset, {})
+        registry = _registry_for_dataset(dataset)
 
         # Collect successful results (non-error, non-empty)
         good_results = {
@@ -1045,7 +1062,7 @@ class AgentCore:
                 # successful results are used as context to re-query failed DBs.
                 # Only run if there are actual errors (not just empty results).
                 has_errors = any(isinstance(v, dict) and "error" in v for v in raw_results.values())
-                if dataset in DATASET_REGISTRY and has_errors:
+                if _registry_for_dataset(dataset) and has_errors:
                     raw_results, extra_corrections, extra_merges = self._crm_second_pass(
                         request.question, sub_queries, raw_results, dataset
                     )

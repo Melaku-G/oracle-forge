@@ -72,7 +72,17 @@ if str(DAB_ROOT) not in sys.path:
 
 AGENT_MD = "agent/AGENT.md"
 CORRECTIONS = "kb/corrections/corrections_log.md"
-DOMAIN_KB = "kb/domain/domain_terms.md"
+DOMAIN_KB = os.getenv("DOMAIN_KB", "kb/domain/domain_terms.md")
+
+DATASET_DOMAIN_KB = {
+    "GITHUB_REPOS": "kb/domain/github_repos_schema.md",
+}
+DATASET_CORRECTIONS = {
+    "GITHUB_REPOS": "kb/corrections/github_repos_corrections.md",
+}
+DATASET_AGENT_MD = {
+    "GITHUB_REPOS": "kb/AGENT_GITHUB_REPOS.md",
+}
 
 DATASET_DBS = {
     "yelp": ["mongodb", "duckdb"],
@@ -142,9 +152,14 @@ def load_queries(dataset: str) -> list[dict]:
     return queries
 
 
-def build_agent() -> AgentCore:
+def build_agent(dataset: str = "") -> AgentCore:
     prompts = PromptLibrary()
-    ctx = ContextManager(AGENT_MD, CORRECTIONS, DOMAIN_KB)
+    ds = dataset.upper() if dataset else ""
+    domain_kb = DATASET_DOMAIN_KB.get(ds, DOMAIN_KB)
+    agent_md = DATASET_AGENT_MD.get(ds, AGENT_MD)
+    os.environ["ACTIVE_DATASET"] = (dataset or "").lower()
+    corrections = DATASET_CORRECTIONS.get(ds, CORRECTIONS)
+    ctx = ContextManager(agent_md, corrections, domain_kb)
     return AgentCore(ctx, prompts)
 
 
@@ -193,7 +208,7 @@ async def main():
         print(f"\n[{qid}] {question}")
 
         for trial in range(args.trials):
-            agent = build_agent()  # fresh agent per trial to reset session history
+            agent = build_agent(args.dataset)  # fresh agent per trial to reset session history
             session_id = f"{args.dataset}-{qid}-t{trial}"
             try:
                 answer = await run_one(agent, question, available_dbs, session_id, args.dataset)
