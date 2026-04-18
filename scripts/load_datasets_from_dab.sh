@@ -235,12 +235,26 @@ load_pancancer() {
 load_patents() {
   log "=== DATASET PATENTS (PostgreSQL + SQLite) — publication SQLite may be large / absent ==="
   local pub="${PATENT_PUBLICATION_SOURCE:-${DAB_ROOT}/query_PATENTS/query_dataset/patent_publication.db}"
-  if [[ -f "$pub" ]]; then
-    copy_one "$pub" "${DST}/patent_publication.db"
+  local dest="${DST}/patent_publication.db"
+  if [[ -f "$dest" ]]; then
+    log "OK patent_publication.db already at ${dest} size_bytes=$(stat -c%s "$dest" 2>/dev/null || stat -f%z "$dest" 2>/dev/null)"
+  elif [[ -f "$pub" ]]; then
+    copy_one "$pub" "$dest"
   else
     log "WARN patent_publication.db not found at ${pub} — set PATENT_PUBLICATION_SOURCE to a local path or add the file from DataAgentBench / Google Drive (~5GB)"
   fi
-  pg_load_sql "patent_CPC" "$PATENT_CPC_POSTGRES_DB" "${DAB_ROOT}/query_PATENTS/query_dataset/patent_CPCDefinition.sql"
+  local cpc_sql="${DAB_ROOT}/query_PATENTS/query_dataset/patent_CPCDefinition.sql"
+  if pg_ready; then
+    local has_tbl=""
+    has_tbl="$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$PATENT_CPC_POSTGRES_DB" -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='cpc_definition'" 2>/dev/null || echo "")"
+    if [[ "$has_tbl" == "1" ]]; then
+      log "SKIP patent CPC SQL: public.cpc_definition already exists (use PG_DROP_DB=1 to force reload from ${cpc_sql})"
+    else
+      pg_load_sql "patent_CPC" "$PATENT_CPC_POSTGRES_DB" "$cpc_sql"
+    fi
+  else
+    pg_load_sql "patent_CPC" "$PATENT_CPC_POSTGRES_DB" "$cpc_sql"
+  fi
 }
 
 load_stockindex() {
