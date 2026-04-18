@@ -17,6 +17,8 @@ DB_TYPE_TO_TOOL = {
     "sqlite":                  "sqlite_query",
     "github_repos_metadata":   "github_repos_metadata_query",
     "github_repos_artifacts":  "github_repos_artifacts_query",
+    "stockmarket_info":       "stockmarket_info_query",
+    "stockmarket_trade":      "stockmarket_trade_query",
 }
 
 _rpc_id = 0

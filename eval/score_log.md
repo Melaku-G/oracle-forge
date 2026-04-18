@@ -159,3 +159,6 @@ python eval/score.py --results eval/run_logs/benchmark_yelp_<timestamp>.json
 | 20260417_114557 | GITHUB_REPOS | 0/4 | 0% | query-pass@1 | — |
 | 20260417_115024 | GITHUB_REPOS | 0/4 | 0% | query-pass@1 | — |
 | 20260417_115337 | GITHUB_REPOS | 0/4 | 0% | query-pass@1 | — |
+| 20260418_101336 | stockmarket | 0/5 | 0% | query-pass@1 | — |
+| 20260418_101559 | stockmarket | 0/5 | 0% | query-pass@1 | — |
+| 20260418_102053 | stockmarket | 0/5 | 0% | query-pass@1 | — |

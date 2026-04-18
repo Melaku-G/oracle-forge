@@ -14,6 +14,7 @@
 #   PG_LOAD=0 bash scripts/load_datasets_from_dab.sh         # skip PostgreSQL
 #   MONGO_LOAD=0 bash scripts/load_datasets_from_dab.sh      # skip MongoDB
 #   PG_DROP_DB=1 bash scripts/load_datasets_from_dab.sh      # DROP + recreate PG DBs before load (destructive)
+#   PG_USE_SUDO=1 bash scripts/load_datasets_from_dab.sh     # run psql as OS user postgres (for dumps that SET ROLE postgres)
 #
 # Schedule (team) — add dataset / test windows:
 #   crmarenapro     07:00–07:30 / 07:30–08:00   Mamaru
@@ -40,6 +41,7 @@ FILES_ONLY="${FILES_ONLY:-0}"
 PG_LOAD="${PG_LOAD:-1}"
 MONGO_LOAD="${MONGO_LOAD:-1}"
 PG_DROP_DB="${PG_DROP_DB:-0}"
+PG_USE_SUDO="${PG_USE_SUDO:-0}"
 
 # shellcheck disable=SC1090
 if [[ -f "${ROOT}/.env" ]]; then
@@ -90,21 +92,33 @@ copy_one() {
 }
 
 psql_base() {
-  PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$@"
+  if [[ "${PG_USE_SUDO}" == "1" ]]; then
+    sudo -n -u postgres psql "$@"
+  else
+    PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$@"
+  fi
 }
 
 pg_ready() {
   [[ "$FILES_ONLY" == "1" ]] && return 1
   [[ "$PG_LOAD" == "0" ]] && return 1
   command -v psql >/dev/null 2>&1 || { log "SKIP psql not installed"; return 1; }
-  [[ -n "${POSTGRES_PASSWORD}" ]] || { log "SKIP PostgreSQL: POSTGRES_PASSWORD empty (set in .env)"; return 1; }
+  if [[ "${PG_USE_SUDO}" == "1" ]]; then
+    command -v sudo >/dev/null 2>&1 || { log "SKIP sudo not installed"; return 1; }
+  else
+    [[ -n "${POSTGRES_PASSWORD}" ]] || { log "SKIP PostgreSQL: POSTGRES_PASSWORD empty (set in .env)"; return 1; }
+  fi
   return 0
 }
 
 pg_ensure_db() {
   local dbname="$1"
   local exists
-  exists="$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" || true)"
+  if [[ "${PG_USE_SUDO}" == "1" ]]; then
+    exists="$(sudo -n -u postgres psql -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" || true)"
+  else
+    exists="$(PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" || true)"
+  fi
   if [[ "$exists" == "1" ]]; then
     if [[ "$PG_DROP_DB" == "1" ]]; then
       log "PG DROP DATABASE ${dbname}"
@@ -123,7 +137,14 @@ pg_load_sql() {
   [[ -f "$sqlfile" ]] || { log "SKIP $label missing $sqlfile"; return 1; }
   log "PG START $label -> db=${dbname} file=${sqlfile}"
   pg_ensure_db "$dbname"
-  if ! psql_base -d "$dbname" -v ON_ERROR_STOP=1 -f "$sqlfile" >>"${LOG_DIR}/pg_${label}.log" 2>&1; then
+  # When using sudo postgres, the postgres OS user may not have read access to paths under
+  # another user's home — pipe SQL on stdin so the invoking user reads the file.
+  if [[ "${PG_USE_SUDO}" == "1" ]]; then
+    if ! cat "$sqlfile" | psql_base -d "$dbname" -v ON_ERROR_STOP=1 >>"${LOG_DIR}/pg_${label}.log" 2>&1; then
+      log "PG FAIL $label — see ${LOG_DIR}/pg_${label}.log"
+      return 1
+    fi
+  elif ! psql_base -d "$dbname" -v ON_ERROR_STOP=1 -f "$sqlfile" >>"${LOG_DIR}/pg_${label}.log" 2>&1; then
     log "PG FAIL $label — see ${LOG_DIR}/pg_${label}.log"
     return 1
   fi
@@ -238,7 +259,7 @@ load_stockmarket() {
 
 ALL_KEYS=(yelp bookreview crmarenapro agnews DEPS_DEV_V1 GITHUB_REPOS googlelocal music_brainz_20k PANCANCER_ATLAS PATENTS stockindex stockmarket)
 
-log "======== RUN START DAB_ROOT=${DAB_ROOT} DST=${DST} FILES_ONLY=${FILES_ONLY} PG_LOAD=${PG_LOAD} MONGO_LOAD=${MONGO_LOAD} PG_DROP_DB=${PG_DROP_DB}"
+log "======== RUN START DAB_ROOT=${DAB_ROOT} DST=${DST} FILES_ONLY=${FILES_ONLY} PG_LOAD=${PG_LOAD} MONGO_LOAD=${MONGO_LOAD} PG_DROP_DB=${PG_DROP_DB} PG_USE_SUDO=${PG_USE_SUDO}"
 
 if [[ ! -d "$DAB_ROOT" ]]; then
   die "DAB_ROOT not found: $DAB_ROOT"

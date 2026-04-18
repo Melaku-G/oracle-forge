@@ -148,6 +148,16 @@ TOOLS = [
         "parameters": {"sql": {"type": "string"}},
     },
     {
+        "name": "stockmarket_info_query",
+        "description": "Executes SQL against stockmarket info SQLite (stockinfo table: Symbol, Listing Exchange, Market Category, ETF, Financial Status, Company Description).",
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "stockmarket_trade_query",
+        "description": "Executes SQL against stockmarket trade DuckDB. Each symbol is its own table (e.g. SELECT * FROM REAL). Columns: Date, Open, High, Low, Close, Adj Close, Volume.",
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
         "name": "cross_db_merge",
         "description": "Merges two result sets from different database tools.",
         "parameters": {
@@ -454,6 +464,31 @@ def _github_repos_artifacts_query(params: dict) -> list[dict]:
     finally:
         conn.close()
 
+
+def _stockmarket_info_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = sqlite3.connect(STOCKMARKET_INFO_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+def _stockmarket_trade_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = duckdb.connect(STOCKMARKET_TRADE_PATH, read_only=True)
+    try:
+        result = conn.execute(sql)
+        cols = [d[0] for d in result.description]
+        return [dict(zip(cols, row)) for row in result.fetchall()]
+    finally:
+        conn.close()
 
 def _cross_db_merge(params: dict) -> dict:
     left = _safe_json(params.get("left_results", "[]"))
