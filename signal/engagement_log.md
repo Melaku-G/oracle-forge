@@ -56,7 +56,7 @@ Apr 13 | https://x.com/melakuG21193/status/2043604628030226886 | Claude Code 3-l
 | 2026-04-16 | X (Twitter) | Thread | Claude Code 3-layer memory architecture and how Team Falcon is applying it — MEMORY.md, topic files, corrections log, 0% to 100% on Yelp in 3 days | https://x.com/melakuG21193/status/2044788944399650948 | 29 | 0 |
 | 2026-04-16 | LinkedIn | Article | What the Claude Code Source Leak Actually Taught Me About Memory Architecture — 685 words, covers 3-layer memory system, autoDream pattern, team application | https://www.linkedin.com/pulse/what-claude-code-source-leak-actually-taught-me-memory-melaku-yilma-ivo3f | 344 | 0 |
 | 2026-04-17 | Medium | Article | Why DataAgentBench's 38% Is the Most Important Number in Enterprise AI Right Now — team experience building against DAB + paper analysis | https://medium.com/@yilmam139/why-dataagentbenchs-38-is-the-most-important-number-in-enterprise-ai-right-now-bbc7cd45126b | — | — |
-| 2026-04-18 | X (Twitter) | Thread | Thread 4 — DAB benchmark submission announcement, final score, PR link | [add link — pending Drivers] | — | — |
+| 2026-04-18 | X (Twitter) | Thread | Thread 4 — DAB benchmark submission announcement, final score, PR link | [post on submission day — see PR_SUBMISSION.md for content] | — | — |
 
 ### Community Intelligence
 | Date | Source | Insight | Action Taken |
@@ -82,6 +82,6 @@ Apr 13 | https://x.com/melakuG21193/status/2043604628030226886 | Claude Code 3-l
 **Any post that brought back actionable technical intelligence:**
 r/LocalLLaMA post generated two replies from engineers actively building against DAB. Reply 1 confirmed silent join failure fix — result set size validation — which Drivers added to the join key resolver before implementation started. Reply 2 confirmed schema introspection before planning as a priority. Both changed technical decisions within hours of being posted.
 
-**DAB PR link (once opened):** [add link — pending Drivers]
+**DAB PR link:** See `results/PR_SUBMISSION.md` — PR title, body, and results JSON prepared. Submit via `gh pr create` from the ucbepic/DataAgentBench fork.
 
-**Any external attention attracted to the DAB PR:** [update once Thread 4 is updated]
+**Any external attention attracted to the DAB PR:** X Thread 4 prepared (Apr 18) — to be posted on submission.
