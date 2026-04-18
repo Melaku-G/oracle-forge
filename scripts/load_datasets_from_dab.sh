@@ -234,11 +234,11 @@ load_pancancer() {
 
 load_patents() {
   log "=== DATASET PATENTS (PostgreSQL + SQLite) — publication SQLite may be large / absent ==="
-  local pub="${DAB_ROOT}/query_PATENTS/query_dataset/patent_publication.db"
+  local pub="${PATENT_PUBLICATION_SOURCE:-${DAB_ROOT}/query_PATENTS/query_dataset/patent_publication.db}"
   if [[ -f "$pub" ]]; then
     copy_one "$pub" "${DST}/patent_publication.db"
   else
-    log "WARN patent_publication.db not found under DAB (optional / may be on Google Drive ~5GB)"
+    log "WARN patent_publication.db not found at ${pub} — set PATENT_PUBLICATION_SOURCE to a local path or add the file from DataAgentBench / Google Drive (~5GB)"
   fi
   pg_load_sql "patent_CPC" "$PATENT_CPC_POSTGRES_DB" "${DAB_ROOT}/query_PATENTS/query_dataset/patent_CPCDefinition.sql"
 }

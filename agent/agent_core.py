@@ -69,12 +69,25 @@ def _get_github_repos_db_map():
     }
 
 
+def _get_patents_db_map():
+    """Logical names match DATASET_DBS['PATENTS'] and DB_TYPE_TO_TOOL in query_executor."""
+    root = Path(__file__).resolve().parents[1]
+    default_pub = root / "db" / "patent_publication.db"
+    pub = os.getenv("PATENT_PUBLICATION_SQLITE_PATH", str(default_pub))
+    return {
+        "publication_database": ("sqlite_patent_publication", pub),
+        "CPCDefinition_database": ("postgresql_patent_cpc", None),
+    }
+
+
 def _registry_for_dataset(dataset: str) -> dict:
     """Logical DB name → (db_type, db_path) for registry-backed datasets including GITHUB_REPOS."""
     if not dataset:
         return {}
     if dataset.upper() == "GITHUB_REPOS":
         return _get_github_repos_db_map()
+    if dataset.upper() == "PATENTS":
+        return _get_patents_db_map()
     return DATASET_REGISTRY.get(dataset, {})
 
 
@@ -172,9 +185,9 @@ def _enforce_intent_db_coverage(
         else:
             target.add("mongodb")
 
-    if ds == "patents" and {"postgresql", "sqlite"}.issubset(available):
+    if ds == "patents" and {"publication_database", "CPCDefinition_database"}.issubset(available):
         if "patent" in q or "cpc" in q:
-            target.update({"postgresql", "sqlite"})
+            target.update({"publication_database", "CPCDefinition_database"})
 
     target &= available
     if not target:

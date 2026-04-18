@@ -88,6 +88,11 @@ Respond with valid JSON only:
                 "\n- Do NOT apply rating filters (avg rating, rating = 5.0) in this query — "
                 "average ratings come from SQLite `review` and are applied after the join."
             )
+        if dialect == "postgresql_patent_cpc":
+            pg_note = (
+                "\n- IMPORTANT: CPC PostgreSQL and publication SQLite are SEPARATE databases. "
+                "Do NOT join CPC tables to publication tables in this query."
+            )
 
         # CRM-specific rules injected when the schema mentions CRMArena Pro
         crm_note = ""
@@ -464,7 +469,9 @@ Return only valid JSON."""
         rules = {
             "postgresql": "use standard PostgreSQL syntax, ILIKE for case-insensitive search, cast types explicitly",
             "postgresql_bookreview": "use standard PostgreSQL syntax, ILIKE for case-insensitive search, cast types explicitly",
+            "postgresql_patent_cpc": "use standard PostgreSQL syntax for CPC / classification tables; ILIKE for text",
             "sqlite": "use SQLite syntax, strftime('%Y', date_col) for year extraction, LIKE for text search",
+            "sqlite_patent_publication": "use SQLite syntax for patent publication metadata tables; LIKE for text search",
             "duckdb": (
                 "use DuckDB analytical functions. "
                 "review.date has MIXED formats: '%B %d, %Y at %I:%M %p' (e.g. 'August 01, 2016 at 03:44 AM') "

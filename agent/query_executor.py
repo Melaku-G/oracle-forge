@@ -14,6 +14,8 @@ DB_TYPE_TO_TOOL = {
     "postgresql_bookreview":   "bookreview_query",
     "postgresql_crm":          "crm_support_query",
     "postgresql_pancancer":    "pancancer_clinical_query",
+    "postgresql_patent_cpc":   "patent_cpc_query",
+    "sqlite_patent_publication": "patent_publication_query",
     "sqlite":                  "sqlite_query",
     "github_repos_metadata":   "github_repos_metadata_query",
     "github_repos_artifacts":  "github_repos_artifacts_query",

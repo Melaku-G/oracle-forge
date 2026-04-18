@@ -50,6 +50,12 @@ DUCKDB_PATH = os.getenv("DUCKDB_PATH", "db/yelp_user.db")
 BOOKREVIEW_POSTGRES_DB = os.getenv("BOOKREVIEW_POSTGRES_DB", "bookreview")
 CRM_SUPPORT_POSTGRES_DB = os.getenv("CRM_SUPPORT_POSTGRES_DB", "crm_support")
 PANCANCER_POSTGRES_DB = os.getenv("PANCANCER_POSTGRES_DB", "pancancer_clinical")
+PATENT_CPC_POSTGRES_DB = os.getenv("PATENT_CPC_POSTGRES_DB", "patent_CPCDefinition")
+_ORACLE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PATENT_PUBLICATION_SQLITE_PATH = os.getenv(
+    "PATENT_PUBLICATION_SQLITE_PATH",
+    os.path.join(_ORACLE_ROOT, "db", "patent_publication.db"),
+)
 _UMB = os.getenv("DAB_ROOT", "/home/ubuntu/shared/DataAgentBench")
 MUSIC_BRAINZ_TRACKS_PATH = os.getenv(
     "MUSIC_BRAINZ_TRACKS_PATH",
@@ -145,6 +151,22 @@ TOOLS = [
     {
         "name": "pancancer_clinical_query",
         "description": "Executes SQL against the PostgreSQL PanCancer Atlas clinical database.",
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "patent_cpc_query",
+        "description": (
+            "Executes SQL against the PATENTS CPC definition PostgreSQL database "
+            f"({PATENT_CPC_POSTGRES_DB})."
+        ),
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "patent_publication_query",
+        "description": (
+            "Executes SQL against the PATENTS publication SQLite database (large file; "
+            "set PATENT_PUBLICATION_SQLITE_PATH or place patent_publication.db under db/)."
+        ),
         "parameters": {"sql": {"type": "string"}},
     },
     {
@@ -264,6 +286,8 @@ def _dispatch(tool_name: str, params: dict) -> Any:
         "bookreview_query": _bookreview_query,
         "crm_support_query": _crm_support_query,
         "pancancer_clinical_query": _pancancer_clinical_query,
+        "patent_cpc_query": _patent_cpc_query,
+        "patent_publication_query": _patent_publication_query,
         "music_brainz_tracks_query": _music_brainz_tracks_query,
         "music_brainz_sales_query": _music_brainz_sales_query,
         "github_repos_metadata_query": _github_repos_metadata_query,
@@ -384,6 +408,46 @@ def _pancancer_clinical_query(params: dict) -> list[dict]:
         password=POSTGRES_PASS,
         cursor_factory=psycopg2.extras.RealDictCursor,
     )
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _patent_cpc_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = psycopg2.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        dbname=PATENT_CPC_POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASS,
+        cursor_factory=psycopg2.extras.RealDictCursor,
+    )
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _patent_publication_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    if not os.path.isfile(PATENT_PUBLICATION_SQLITE_PATH):
+        raise ValueError(
+            "PATENTS publication SQLite not found at PATENT_PUBLICATION_SQLITE_PATH="
+            f"{PATENT_PUBLICATION_SQLITE_PATH!r}. Place patent_publication.db from DataAgentBench "
+            "or download the PATENTS asset, then re-run scripts/load_datasets_from_dab.sh."
+        )
+    conn = sqlite3.connect(PATENT_PUBLICATION_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
         cur.execute(sql)

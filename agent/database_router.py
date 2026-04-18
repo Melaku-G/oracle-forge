@@ -14,7 +14,10 @@ DATASET_DB_MAP = {
     "pancancer":     {"clinical_database": "postgresql",   "molecular_database": "duckdb"},
     "DEPS_DEV_V1":   {"package_database": "sqlite",        "project_database": "duckdb"},
     "github_repos":  {"metadata_database": "sqlite",       "artifacts_database": "duckdb"},
-    "patents":       {"publication_database": "sqlite",     "CPCDefinition_database": "postgresql"},
+    "patents":       {
+        "publication_database": "sqlite_patent_publication",
+        "CPCDefinition_database": "postgresql_patent_cpc",
+    },
 }
 
 # Keywords that signal which DB type a question targets
@@ -22,6 +25,8 @@ DB_TYPE_SIGNALS = {
     "mongodb": ["business", "checkin", "attributes", "hours", "description", "articles", "support"],
     "duckdb": ["review", "tip", "user", "rating", "trade", "sales", "molecular", "project"],
     "postgresql": ["books", "crm", "googlelocal", "clinical", "patent", "CPCDefinition"],
+    "postgresql_patent_cpc": ["CPCDefinition", "cpc", "patent class"],
+    "sqlite_patent_publication": ["publication", "patent title", "citation"],
     "sqlite":     ["metadata", "package", "tracks", "stockinfo", "indexinfo", "territory"],
 }
 

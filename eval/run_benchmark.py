@@ -100,6 +100,7 @@ DATASET_DBS = {
     ],
     "DEPS_DEV_V1": ["package_database", "project_database"],
     "PANCANCER_ATLAS": ["clinical_database", "molecular_database"],
+    "PATENTS": ["publication_database", "CPCDefinition_database"],
     "stockmarket":    ["stockmarket_info", "stockmarket_trade"],
 }
 

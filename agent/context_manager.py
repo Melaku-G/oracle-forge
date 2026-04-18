@@ -87,6 +87,8 @@ class ContextManager:
             "project_database": "### DuckDB — deps_dev project_database",
             "clinical_database": "### PostgreSQL — PanCancer Atlas clinical_database",
             "molecular_database": "### DuckDB — PanCancer Atlas molecular_database",
+            "postgresql_patent_cpc": "### PostgreSQL",
+            "sqlite_patent_publication": "### SQLite",
         }
         heading = heading_map.get(db_type)
         if not heading:
