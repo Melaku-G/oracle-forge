@@ -18,11 +18,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Repo root on path when invoked as `python3 eval/run_benchmark.py`
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from dotenv import load_dotenv
 
 from agent.agent_core import AgentCore
 from agent.context_manager import ContextManager
-from agent.models import QueryRequest
+from agent.models import AgentResponse, QueryRequest
 from agent.prompt_library import PromptLibrary
 
 load_dotenv()
@@ -76,6 +81,7 @@ DOMAIN_KB = os.getenv("DOMAIN_KB", "kb/domain/domain_terms.md")
 
 DATASET_DOMAIN_KB = {
     "GITHUB_REPOS": "kb/domain/github_repos_schema.md",
+    "DEPS_DEV_V1": "kb/domain/deps_dev_mcp.md",
 }
 DATASET_CORRECTIONS = {
     "GITHUB_REPOS": "kb/corrections/github_repos_corrections.md",
@@ -102,6 +108,8 @@ DATASET_DBS = {
     "PANCANCER_ATLAS": ["clinical_database", "molecular_database"],
     "PATENTS": ["publication_database", "CPCDefinition_database"],
     "stockmarket":    ["stockmarket_info", "stockmarket_trade"],
+    "stockindex":      ["stockindex_info", "stockindex_trade"],
+    "music_brainz_20k": ["music_brainz_tracks", "music_brainz_sales"],
 }
 
 
@@ -167,15 +175,14 @@ def build_agent(dataset: str = "") -> AgentCore:
 
 async def run_one(
     agent: AgentCore, question: str, available_dbs: list[str], session_id: str, dataset: str = ""
-) -> str:
+) -> AgentResponse:
     request = QueryRequest(
         question=question,
         available_databases=available_dbs,
         session_id=session_id,
         dataset=dataset.lower() if dataset else None,
     )
-    response = await agent.run(request)
-    return response.answer
+    return await agent.run(request)
 
 
 async def main():
@@ -212,9 +219,17 @@ async def main():
         for trial in range(args.trials):
             agent = build_agent(args.dataset)  # fresh agent per trial to reset session history
             session_id = f"{args.dataset}-{qid}-t{trial}"
+            corrections: list = []
             try:
-                answer = await run_one(agent, question, available_dbs, session_id, args.dataset)
+                response = await run_one(agent, question, available_dbs, session_id, args.dataset)
+                answer = response.answer
+                corrections = response.query_trace.self_corrections
                 print(f"  Trial {trial + 1} answer: {answer[:120]}")
+                if corrections:
+                    print(f"  Self-corrections ({len(corrections)}):")
+                    for c in corrections:
+                        ft = c.get("failure_type", "?")
+                        print(f"    attempt {c.get('attempt', '?')}: {ft}")
             except Exception as e:
                 answer = f"ERROR: {e}"
                 print(f"  Trial {trial + 1} ERROR: {e}")
@@ -225,7 +240,13 @@ async def main():
                 ok, reason = False, "no validate.py"
 
             trial_results.append(
-                {"trial": trial + 1, "answer": answer, "passed": ok, "reason": reason}
+                {
+                    "trial": trial + 1,
+                    "answer": answer,
+                    "self_corrections": corrections,
+                    "passed": ok,
+                    "reason": reason,
+                }
             )
             total += 1
             if ok:

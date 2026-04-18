@@ -9,6 +9,12 @@ Usage:
 """
 import argparse
 import asyncio
+import sys
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from dotenv import load_dotenv
 
@@ -41,9 +47,9 @@ DATASET_DBS = {
 }
 
 
-def build_agent() -> AgentCore:
+def build_agent(agent_md: str = AGENT_MD) -> AgentCore:
     prompts  = PromptLibrary()
-    ctx      = ContextManager(AGENT_MD, CORRECTIONS, DOMAIN_KB)
+    ctx      = ContextManager(agent_md, CORRECTIONS, DOMAIN_KB)
     return AgentCore(ctx, prompts)
 
 
@@ -52,6 +58,11 @@ async def main():
     parser.add_argument("--question", required=True, help="Natural language question")
     parser.add_argument("--dataset", default="yelp", choices=list(DATASET_DBS.keys()))
     parser.add_argument("--session-id", default="test-session")
+    parser.add_argument(
+        "--agent-md",
+        default=AGENT_MD,
+        help="Override the AGENT.md context file (e.g. /dev/null to run without Layer 1 context)",
+    )
     args = parser.parse_args()
 
     available_dbs = DATASET_DBS[args.dataset]
@@ -64,9 +75,12 @@ async def main():
 
     print(f"\nQuestion : {args.question}")
     print(f"Dataset  : {args.dataset}")
-    print(f"DBs      : {available_dbs}\n")
+    print(f"DBs      : {available_dbs}")
+    if args.agent_md != AGENT_MD:
+        print(f"[Layer 1 context: {args.agent_md}]")
+    print()
 
-    agent = build_agent()
+    agent = build_agent(args.agent_md)
     response = await agent.run(request)
 
     print("=" * 60)
