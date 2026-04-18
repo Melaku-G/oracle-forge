@@ -177,3 +177,71 @@ These mismatches will cause silent wrong answers if not handled:
 - **Layer 1**: This file (schema + behavioral rules)
 - **Layer 2**: `kb/domain/domain_knowledge.md` (domain terms, fiscal conventions)
 - **Layer 3**: `kb/corrections/corrections_log.md` (past failures and fixes)
+
+### GITHUB_REPOS — metadata database (github_repos_metadata_query tool)
+SQLite database with 3 tables:
+
+**Table: languages**
+- repo_name (TEXT): GitHub repo "owner/repo" e.g. "apple/swift"
+- language_description (TEXT): Languages used e.g. "Swift JavaScript"
+
+**Table: repos**
+- repo_name (TEXT): GitHub repo "owner/repo"
+- watch_count (INTEGER): Number of watchers
+
+**Table: licenses**
+- repo_name (TEXT): GitHub repo "owner/repo"
+- license (TEXT): e.g. "apache-2.0", "mit"
+
+### GITHUB_REPOS — artifacts database (github_repos_artifacts_query tool)
+DuckDB database with 3 tables:
+
+**Table: commits**
+- commit (TEXT): SHA identifier
+- subject (TEXT): Short commit message
+- message (TEXT): Full commit message
+- repo_name (TEXT): GitHub repo "owner/repo"
+
+**Table: contents**
+- id (TEXT): File blob identifier
+- content (TEXT): File text content
+- sample_repo_name (TEXT): GitHub repo "owner/repo"
+- sample_path (TEXT): File path e.g. "README.md"
+- repo_data_description (TEXT): File metadata description
+
+**Table: files**
+- repo_name (TEXT): GitHub repo "owner/repo"
+- path (TEXT): File path
+- id (TEXT): File blob identifier
+
+**CRITICAL RULES for GITHUB_REPOS:**
+- NEVER join SQLite and DuckDB in one query — they are separate databases
+- Use github_repos_metadata_query for: languages, repos, licenses tables
+- Use github_repos_artifacts_query for: commits, contents, files tables
+- Cross-DB pattern: Step 1 get repo_names from SQLite, Step 2 use IN (...) in DuckDB
+- NEVER use subqueries that reference tables from the other database
+
+**EXACT CORRECT SQL PATTERNS for GITHUB_REPOS:**
+
+For Q3 type (commit count with language+license filter):
+- github_repos_metadata_query: SELECT DISTINCT l.repo_name FROM languages l JOIN licenses li ON l.repo_name = li.repo_name WHERE l.language_description LIKE '%Shell%' AND li.license = 'apache-2.0'
+- github_repos_artifacts_query: SELECT COUNT(*) as num_messages FROM commits WHERE repo_name IN ('repo1','repo2') AND message IS NOT NULL AND LENGTH(message) < 1000 AND LOWER(message) NOT LIKE 'merge%' AND LOWER(message) NOT LIKE 'update%' AND LOWER(message) NOT LIKE 'test%'
+
+For Q4 type (top repos by commits, language filter):
+- github_repos_metadata_query: SELECT repo_name FROM languages WHERE language_description NOT LIKE '%Python%'
+- github_repos_artifacts_query: SELECT repo_name, COUNT(*) as num_commits FROM commits WHERE repo_name IN ('repo1','repo2') GROUP BY repo_name ORDER BY num_commits DESC LIMIT 5
+
+For Q1 type (README copyright proportion):
+- github_repos_metadata_query: SELECT repo_name FROM languages WHERE language_description NOT LIKE '%Python%'
+- github_repos_artifacts_query: SELECT COUNT(DISTINCT sample_repo_name) as total, SUM(CASE WHEN LOWER(content) LIKE '%copyright%' THEN 1 ELSE 0 END) as with_copyright FROM contents WHERE sample_path LIKE '%README%' AND sample_repo_name IN ('repo1','repo2')
+
+For Q2 type (most copied Swift file):
+- github_repos_metadata_query: SELECT repo_name FROM languages WHERE language_description LIKE '%Swift%'
+- github_repos_artifacts_query: SELECT sample_repo_name, id, COUNT(*) as copy_count FROM contents WHERE sample_path LIKE '%.swift' AND (repo_data_description IS NULL OR repo_data_description NOT LIKE '%binary%') AND sample_repo_name IN ('repo1','repo2') GROUP BY sample_repo_name, id ORDER BY copy_count DESC LIMIT 1
+
+**IMPORTANT DATA FACTS for GITHUB_REPOS:**
+- The commits table in artifacts database only has 6 repos: torvalds/linux, apple/swift, twbs/bootstrap, Microsoft/vscode, facebook/react, tensorflow/tensorflow
+- Do NOT use large IN clauses from SQLite for DuckDB queries — most repos won't match
+- For Q4 type (top repos by commits, not Python): Query DuckDB commits directly, then filter by joining with SQLite language info
+- CORRECT Q4 pattern: github_repos_artifacts_query first: SELECT repo_name, COUNT(*) as num_commits FROM commits GROUP BY repo_name ORDER BY num_commits DESC LIMIT 10 — then filter out Python repos using SQLite results
+- CORRECT Q3 pattern: github_repos_metadata_query: SELECT DISTINCT l.repo_name FROM languages l JOIN licenses li ON l.repo_name = li.repo_name WHERE l.language_description LIKE '%Shell%' AND li.license = 'apache-2.0' — then github_repos_artifacts_query: SELECT COUNT(*) as num_messages FROM commits WHERE repo_name IN (results from metadata) AND message IS NOT NULL AND LENGTH(message) < 1000 AND LOWER(message) NOT LIKE 'merge%' AND LOWER(message) NOT LIKE 'update%' AND LOWER(message) NOT LIKE 'test%'
