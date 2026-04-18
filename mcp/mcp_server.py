@@ -268,6 +268,8 @@ def _dispatch(tool_name: str, params: dict) -> Any:
         "music_brainz_sales_query": _music_brainz_sales_query,
         "github_repos_metadata_query": _github_repos_metadata_query,
         "github_repos_artifacts_query": _github_repos_artifacts_query,
+        "stockmarket_info_query":  _stockmarket_info_query,
+        "stockmarket_trade_query": _stockmarket_trade_query,
         "mongo_aggregate": _mongo_aggregate,
         "mongo_find": _mongo_find,
         "sqlite_query": _sqlite_query,
