@@ -73,6 +73,15 @@ MUSIC_BRAINZ_SALES_PATH = os.getenv(
     "MUSIC_BRAINZ_SALES_PATH",
     f"{_UMB}/query_music_brainz_20k/query_dataset/sales.duckdb",
 )
+# stockindex dataset: indexInfo is SQLite, indextrade is DuckDB (despite .db extension)
+STOCKINDEX_INFO_PATH = os.getenv(
+    "STOCKINDEX_INFO_PATH",
+    f"{_UMB}/query_stockindex/query_dataset/indexInfo_query.db",
+)
+STOCKINDEX_TRADE_PATH = os.getenv(
+    "STOCKINDEX_TRADE_PATH",
+    f"{_UMB}/query_stockindex/query_dataset/indextrade_query.db",
+)
 # Module-level MongoDB client — connection pool shared across all requests
 _mongo_client: Optional[MongoClient] = None
 
@@ -177,6 +186,23 @@ TOOLS = [
     {
         "name": "stockmarket_trade_query",
         "description": "Executes SQL against stockmarket trade DuckDB. Each symbol is its own table (e.g. SELECT * FROM REAL). Columns: Date, Open, High, Low, Close, Adj Close, Volume.",
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "stockindex_info_query",
+        "description": (
+            "Executes SQL against the stockindex info SQLite database "
+            "(index_info table: Exchange TEXT, Currency TEXT — 14 rows, one per exchange)."
+        ),
+        "parameters": {"sql": {"type": "string"}},
+    },
+    {
+        "name": "stockindex_trade_query",
+        "description": (
+            "Executes analytical SQL against the stockindex trade DuckDB database "
+            "(index_trade table: Index, Date, Open, High, Low, Close, Adj Close, CloseUSD — 104k rows). "
+            "NOTE: this file has a .db extension but is DuckDB format, not SQLite."
+        ),
         "parameters": {"sql": {"type": "string"}},
     },
     {
@@ -294,6 +320,8 @@ def _dispatch(tool_name: str, params: dict) -> Any:
         "github_repos_artifacts_query": _github_repos_artifacts_query,
         "stockmarket_info_query":  _stockmarket_info_query,
         "stockmarket_trade_query": _stockmarket_trade_query,
+        "stockindex_info_query":   _stockindex_info_query,
+        "stockindex_trade_query":  _stockindex_trade_query,
         "mongo_aggregate": _mongo_aggregate,
         "mongo_find": _mongo_find,
         "sqlite_query": _sqlite_query,
@@ -555,6 +583,34 @@ def _stockmarket_trade_query(params: dict) -> list[dict]:
         return [dict(zip(cols, row)) for row in result.fetchall()]
     finally:
         conn.close()
+
+def _stockindex_info_query(params: dict) -> list[dict]:
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = sqlite3.connect(STOCKINDEX_INFO_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _stockindex_trade_query(params: dict) -> list[dict]:
+    """indextrade_query.db is DuckDB format despite the .db extension."""
+    sql = params.get("sql", "")
+    if not sql:
+        raise ValueError("Parameter 'sql' is required")
+    conn = duckdb.connect(STOCKINDEX_TRADE_PATH, read_only=True)
+    try:
+        result = conn.execute(sql)
+        cols = [d[0] for d in result.description]
+        return [dict(zip(cols, row)) for row in result.fetchall()]
+    finally:
+        conn.close()
+
 
 def _cross_db_merge(params: dict) -> dict:
     left = _safe_json(params.get("left_results", "[]"))
