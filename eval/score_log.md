@@ -42,35 +42,46 @@ python eval/score.py --results eval/run_logs/benchmark_yelp_<timestamp>.json
 
 ---
 
+## Run Methodology
+
+All benchmark runs use `python eval/run_benchmark.py --dataset <name> --trials <n>`. Each run:
+1. Loads the agent with the current AGENT.md + domain KB + corrections log
+2. Executes each benchmark query N times (trials)
+3. Checks each answer against ground truth using numeric tolerance (±5%), fuzzy name match (≤3 edit distance), or list containment
+4. Computes `any_pass` per query — True if at least 1 trial passes
+5. Saves results to `eval/run_logs/benchmark_<dataset>_<timestamp>.json`
+
+To reproduce any run: `python eval/run_benchmark.py --dataset <dataset> --trials <trials>` after restoring the agent state at that commit (see git log).
+
 ## All Runs
 
-| Timestamp | Dataset | Passed | pass@1 |
-|-----------|---------|--------|--------|
-| 20260411_142058 | yelp | 0/7 | 0% |
-| 20260411_142724 | yelp | 0/7 | 0% |
-| 20260411_143810 | yelp | 1/7 | 14% |
-| 20260411_144040 | yelp | 0/7 | 0% |
-| 20260411_144221 | yelp | 0/7 | 0% |
-| 20260413_142407 | yelp | 0/7 | 0% |
-| 20260413_204424 | yelp | 0/7 | 0% |
-| 20260413_205007 | yelp | 0/7 | 0% |
-| 20260414_044753 | yelp | 1/7 | 14% |
-| 20260414_121131 | yelp | 0/7 | 0% |
-| 20260414_121741 | yelp | 0/7 | 0% |
-| 20260414_122656 | yelp | 0/7 | 0% |
-| 20260414_123006 | yelp | 1/7 | 14% |
-| 20260414_123714 | yelp | 1/7 | 14% |
-| 20260414_125716 | yelp | 1/7 | 14% |
-| 20260414_153138 | yelp | 1/7 | 14% |
-| 20260414_155651 | yelp | 4/7 | 57% |
-| 20260414_173700 | yelp | 4/7 | 57% |
-| 20260414_174530 | yelp | 4/7 | 57% |
-| 20260414_175755 | yelp | 5/7 | 71% |
-| 20260414_201357 | yelp | 6/7 | 86% |
-| 20260414_201705 | yelp | 7/7 | 100% |
-| 20260414_203704 | yelp | 6/7 | 86% |
-| 20260414_204206 | yelp | 7/7 | 100% |
-| 20260414_205611 | yelp | 6/7 | 86% |
+| Timestamp | Dataset | Passed | pass@1 | Metric | What changed |
+|-----------|---------|--------|--------|--------|--------------|
+| 20260411_142058 | yelp | 0/7 | 0% | query-pass@1 | Baseline — 1 trial per query; code fence + pipeline string failures |
+| 20260411_142724 | yelp | 0/7 | 0% | query-pass@1 | Regression check — same errors |
+| 20260411_143810 | yelp | 1/7 | 14% | query-pass@1 | Pattern A fix applied: "Return raw SQL only, no markdown" in nl_to_sql() |
+| 20260411_144040 | yelp | 0/7 | 0% | query-pass@1 | Regression check after prompt change — inconsistent LLM output |
+| 20260411_144221 | yelp | 0/7 | 0% | query-pass@1 | Regression check |
+| 20260413_142407 | yelp | 0/7 | 0% | query-pass@1 | Fresh session — Pattern A fix not yet permanent |
+| 20260413_204424 | yelp | 0/7 | 0% | query-pass@1 | Regression check |
+| 20260413_205007 | yelp | 0/7 | 0% | query-pass@1 | Regression check |
+| 20260414_044753 | yelp | 1/7 | 14% | query-pass@1 | Pattern A fix confirmed persistent |
+| 20260414_121131 | yelp | 0/7 | 0% | query-pass@1 | Regression after context manager change — broke prompt loading |
+| 20260414_121741 | yelp | 0/7 | 0% | query-pass@1 | Context manager reverted; debugging session |
+| 20260414_122656 | yelp | 0/7 | 0% | query-pass@1 | Debugging pipeline format |
+| 20260414_123006 | yelp | 1/7 | 14% | query-pass@1 | Pattern A stable again |
+| 20260414_123714 | yelp | 1/7 | 14% | query-pass@1 | Regression check |
+| 20260414_125716 | yelp | 1/7 | 14% | query-pass@1 | Regression check |
+| 20260414_153138 | yelp | 1/7 | 14% | query-pass@1 | Pre-Pattern B baseline |
+| 20260414_155651 | yelp | 4/7 | 57% | query-pass@1 | Pattern B fix: "Return pipeline as raw JSON array starting with [" in nl_to_mongodb() |
+| 20260414_173700 | yelp | 4/7 | 57% | query-pass@1 | Regression check — Pattern B stable |
+| 20260414_174530 | yelp | 4/7 | 57% | query-pass@1 | Regression check |
+| 20260414_175755 | yelp | 5/7 | 71% | query-pass@1 | Pattern C fix: added "DuckDB ONLY has review, user, tip tables" to AGENT.md |
+| 20260414_201357 | yelp | 6/7 | 86% | query-pass@1 | Pattern D fix: "Never use strptime; use LIKE '%2018%' for year filtering" in nl_to_sql() |
+| 20260414_201705 | yelp | 7/7 | 100% | query-pass@1 | Python post-processing: state/category extraction via regex in agent_core.py |
+| 20260414_203704 | yelp | 6/7 | 86% | query-pass@1 | Regression — Q5 flaky; LLM temperature variation |
+| 20260414_204206 | yelp | 7/7 | 100% | query-pass@1 | Regression check — 100% confirmed again |
+| 20260414_205611 | yelp | 6/7 | 86% | query-pass@1 | Regression — Q5 flaky (WiFi query, temperature-sensitive) |
 | 20260414_205915 | yelp | 7/7 | 100% |
 | 20260414_210933 | yelp | 7/7 | 100% |
 | 20260415_063051 | yelp | 7/7 | 100% |
@@ -162,3 +173,4 @@ python eval/score.py --results eval/run_logs/benchmark_yelp_<timestamp>.json
 | 20260418_101336 | stockmarket | 0/5 | 0% | query-pass@1 | — |
 | 20260418_101559 | stockmarket | 0/5 | 0% | query-pass@1 | — |
 | 20260418_102053 | stockmarket | 0/5 | 0% | query-pass@1 | — |
+| 20260418_102636 | stockmarket | 0/5 | 0% | query-pass@1 | — |
