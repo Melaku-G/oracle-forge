@@ -30,7 +30,7 @@ def get_client() -> OpenAI:
     )
 
 def call(client: OpenAI, prompt: str, system: str = "", max_tokens: int = 1024,
-         model: str = "google/gemini-2.0-flash-001") -> str:
+         model: str = "google/gemini-3-flash-preview") -> str:
     """Single LLM call with automatic key rotation on rate limit."""
     global _keys, _key_index
     messages = []
