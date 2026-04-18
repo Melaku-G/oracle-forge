@@ -2,15 +2,12 @@
 
 This directory contains benchmark evaluation results from Oracle Forge runs against the UC Berkeley DataAgentBench (DAB) benchmark suite, plus the GitHub PR submission evidence.
 
-**Live agent:** https://greatest-thesaurus-deposit-engineers.trycloudflare.com/docs
-
 ## Contents
 
 | File | Description |
 |------|-------------|
-| `dab_submission.json` | DAB-formatted results JSON (query/run/answer, 0-indexed runs) |
-| `oracleforge_teamfalcon_trp1_n5.json` | Same results in alternative format |
-| `PR_SUBMISSION.md` | PR submission record — [PR #35](https://github.com/ucbepic/DataAgentBench/pull/35) submitted 2026-04-18 |
+| `dab_submission.json` | DAB-formatted results JSON — best trial answers per query, used for PR submission |
+| `PR_SUBMISSION.md` | PR submission evidence — title, body, and submission record for ucbepic/DataAgentBench |
 
 ## Benchmark Summary
 
