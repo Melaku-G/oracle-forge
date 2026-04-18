@@ -931,13 +931,28 @@ class AgentCore:
                             repo_names.append(rn)
                 # Step 2: Inject repo_names into DuckDB query
                 if repo_names:
-                    esc = ("'" + r.replace("'", "''") + "'" for r in repo_names[:5000])
-                    repo_list = ", ".join(esc)
-                    new_art_query = art_sq.query.replace(
+                    repo_list = ", ".join(
+                        "'" + r.replace("'", "''") + "'" for r in repo_names[:5000]
+                    )
+                    new_art_query = art_sq.query
+                    new_art_query = new_art_query.replace(
                         "IN ('repo1','repo2')", "IN (" + repo_list + ")"
                     )
                     new_art_query = new_art_query.replace(
                         "IN ('repo1', 'repo2')", "IN (" + repo_list + ")"
+                    )
+                    # Replace cross-DB subquery pattern (LLM tries to subquery SQLite from DuckDB)
+                    new_art_query = re.sub(
+                        r"IN\s*\(SELECT\s+repo_name\s+FROM\s+(?:languages|licenses|repos)[^)]*\)",
+                        "IN (" + repo_list + ")",
+                        new_art_query,
+                        flags=re.IGNORECASE | re.DOTALL,
+                    )
+                    new_art_query = re.sub(
+                        r"IN\s*\(SELECT\s+sample_repo_name\s+FROM\s+(?:languages|licenses|repos)[^)]*\)",
+                        "IN (" + repo_list + ")",
+                        new_art_query,
+                        flags=re.IGNORECASE | re.DOTALL,
                     )
                     art_sq = SubQuery(
                         database_type="github_repos_artifacts",

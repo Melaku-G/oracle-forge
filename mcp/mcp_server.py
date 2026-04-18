@@ -50,7 +50,7 @@ DUCKDB_PATH = os.getenv("DUCKDB_PATH", "db/yelp_user.db")
 BOOKREVIEW_POSTGRES_DB = os.getenv("BOOKREVIEW_POSTGRES_DB", "bookreview")
 CRM_SUPPORT_POSTGRES_DB = os.getenv("CRM_SUPPORT_POSTGRES_DB", "crm_support")
 PANCANCER_POSTGRES_DB = os.getenv("PANCANCER_POSTGRES_DB", "pancancer_clinical")
-_UMB = "/home/ubuntu/shared/DataAgentBench"
+_UMB = os.getenv("DAB_ROOT", "/home/ubuntu/shared/DataAgentBench")
 MUSIC_BRAINZ_TRACKS_PATH = os.getenv(
     "MUSIC_BRAINZ_TRACKS_PATH",
     f"{_UMB}/query_music_brainz_20k/query_dataset/tracks.db",
